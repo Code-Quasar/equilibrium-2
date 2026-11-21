@@ -1,0 +1,509 @@
+{
+ "buildings": {
+  "biogas_facility": {
+   "build_unlock_micro": 45000000,
+   "l1": {
+    "air_micro_per_minute": 0,
+    "collection_per_minute": 0,
+    "cost_micro": 225000000,
+    "demand_micro_E": 8000000,
+    "duration_seconds": 42,
+    "generation_micro_E": 0,
+    "housing": 0,
+    "income_micro_per_minute": 0,
+    "jobs": 90,
+    "recycling_per_minute": 0,
+    "reuse_per_minute": 0,
+    "services": 0,
+    "treatment_per_minute": 30,
+    "upkeep_micro_per_minute": 10000000,
+    "waste_per_minute": 0
+   },
+   "upgrade": {
+    "air_micro_per_minute": 0,
+    "collection_per_minute": 0,
+    "cost_micro": 135000000,
+    "demand_micro_E": 4000000,
+    "duration_seconds": 30,
+    "generation_micro_E": 0,
+    "housing": 0,
+    "income_micro_per_minute": 0,
+    "jobs": 45,
+    "recycling_per_minute": 0,
+    "reuse_per_minute": 0,
+    "services": 0,
+    "treatment_per_minute": 20,
+    "upkeep_micro_per_minute": 5000000,
+    "waste_per_minute": 0
+   },
+   "upgrade_unlock_micro": 70000000
+  },
+  "commercial_district": {
+   "build_unlock_micro": 0,
+   "l1": {
+    "air_micro_per_minute": 250000,
+    "collection_per_minute": 0,
+    "cost_micro": 190000000,
+    "demand_micro_E": 22000000,
+    "duration_seconds": 28,
+    "generation_micro_E": 0,
+    "housing": 0,
+    "income_micro_per_minute": 90000000,
+    "jobs": 200,
+    "recycling_per_minute": 0,
+    "reuse_per_minute": 0,
+    "services": 0,
+    "treatment_per_minute": 0,
+    "upkeep_micro_per_minute": 12000000,
+    "waste_per_minute": 10
+   },
+   "upgrade": {
+    "air_micro_per_minute": 120000,
+    "collection_per_minute": 0,
+    "cost_micro": 115000000,
+    "demand_micro_E": 9000000,
+    "duration_seconds": 23,
+    "generation_micro_E": 0,
+    "housing": 0,
+    "income_micro_per_minute": 54000000,
+    "jobs": 120,
+    "recycling_per_minute": 0,
+    "reuse_per_minute": 0,
+    "services": 0,
+    "treatment_per_minute": 0,
+    "upkeep_micro_per_minute": 6000000,
+    "waste_per_minute": 5
+   },
+   "upgrade_unlock_micro": 20000000
+  },
+  "factory": {
+   "build_unlock_micro": 0,
+   "l1": {
+    "air_micro_per_minute": 2200000,
+    "collection_per_minute": 0,
+    "cost_micro": 260000000,
+    "demand_micro_E": 38000000,
+    "duration_seconds": 38,
+    "generation_micro_E": 0,
+    "housing": 0,
+    "income_micro_per_minute": 155000000,
+    "jobs": 300,
+    "recycling_per_minute": 0,
+    "reuse_per_minute": 0,
+    "services": 0,
+    "treatment_per_minute": 0,
+    "upkeep_micro_per_minute": 24000000,
+    "waste_per_minute": 30
+   },
+   "upgrade": {
+    "air_micro_per_minute": 900000,
+    "collection_per_minute": 0,
+    "cost_micro": 180000000,
+    "demand_micro_E": 16000000,
+    "duration_seconds": 32,
+    "generation_micro_E": 0,
+    "housing": 0,
+    "income_micro_per_minute": 85000000,
+    "jobs": 140,
+    "recycling_per_minute": 0,
+    "reuse_per_minute": 0,
+    "services": 0,
+    "treatment_per_minute": 0,
+    "upkeep_micro_per_minute": 12000000,
+    "waste_per_minute": 12
+   },
+   "upgrade_unlock_micro": 70000000
+  },
+  "fossil_power_plant": {
+   "build_unlock_micro": 0,
+   "l1": {
+    "air_micro_per_minute": 2800000,
+    "collection_per_minute": 0,
+    "cost_micro": 175000000,
+    "demand_micro_E": 0,
+    "duration_seconds": 32,
+    "generation_micro_E": 125000000,
+    "housing": 0,
+    "income_micro_per_minute": 0,
+    "jobs": 50,
+    "recycling_per_minute": 0,
+    "reuse_per_minute": 0,
+    "services": 0,
+    "treatment_per_minute": 0,
+    "upkeep_micro_per_minute": 17000000,
+    "waste_per_minute": 0
+   },
+   "upgrade": {
+    "air_micro_per_minute": 2000000,
+    "collection_per_minute": 0,
+    "cost_micro": 125000000,
+    "demand_micro_E": 0,
+    "duration_seconds": 25,
+    "generation_micro_E": 90000000,
+    "housing": 0,
+    "income_micro_per_minute": 0,
+    "jobs": 25,
+    "recycling_per_minute": 0,
+    "reuse_per_minute": 0,
+    "services": 0,
+    "treatment_per_minute": 0,
+    "upkeep_micro_per_minute": 9000000,
+    "waste_per_minute": 0
+   },
+   "upgrade_unlock_micro": 70000000
+  },
+  "green_space": {
+   "build_unlock_micro": 0,
+   "l1": {
+    "air_micro_per_minute": -1500000,
+    "collection_per_minute": 0,
+    "cost_micro": 130000000,
+    "demand_micro_E": 0,
+    "duration_seconds": 20,
+    "generation_micro_E": 0,
+    "housing": 0,
+    "income_micro_per_minute": 0,
+    "jobs": 20,
+    "recycling_per_minute": 0,
+    "reuse_per_minute": 0,
+    "services": 0,
+    "treatment_per_minute": 0,
+    "upkeep_micro_per_minute": 5000000,
+    "waste_per_minute": 0
+   },
+   "upgrade": {
+    "air_micro_per_minute": -900000,
+    "collection_per_minute": 0,
+    "cost_micro": 75000000,
+    "demand_micro_E": 0,
+    "duration_seconds": 20,
+    "generation_micro_E": 0,
+    "housing": 0,
+    "income_micro_per_minute": 0,
+    "jobs": 10,
+    "recycling_per_minute": 0,
+    "reuse_per_minute": 0,
+    "services": 0,
+    "treatment_per_minute": 0,
+    "upkeep_micro_per_minute": 2000000,
+    "waste_per_minute": 0
+   },
+   "upgrade_unlock_micro": 20000000
+  },
+  "landfill": {
+   "build_unlock_micro": 0,
+   "l1": {
+    "air_micro_per_minute": 0,
+    "collection_per_minute": 0,
+    "cost_micro": 100000000,
+    "demand_micro_E": 4000000,
+    "duration_seconds": 20,
+    "generation_micro_E": 0,
+    "housing": 0,
+    "income_micro_per_minute": 0,
+    "jobs": 40,
+    "recycling_per_minute": 0,
+    "reuse_per_minute": 0,
+    "services": 0,
+    "treatment_per_minute": 55,
+    "upkeep_micro_per_minute": 8000000,
+    "waste_per_minute": 0
+   },
+   "upgrade": {
+    "air_micro_per_minute": 0,
+    "collection_per_minute": 0,
+    "cost_micro": 65000000,
+    "demand_micro_E": 2000000,
+    "duration_seconds": 18,
+    "generation_micro_E": 0,
+    "housing": 0,
+    "income_micro_per_minute": 0,
+    "jobs": 20,
+    "recycling_per_minute": 0,
+    "reuse_per_minute": 0,
+    "services": 0,
+    "treatment_per_minute": 45,
+    "upkeep_micro_per_minute": 4000000,
+    "waste_per_minute": 0
+   },
+   "upgrade_unlock_micro": 20000000
+  },
+  "public_services_center": {
+   "build_unlock_micro": 0,
+   "l1": {
+    "air_micro_per_minute": 0,
+    "collection_per_minute": 0,
+    "cost_micro": 175000000,
+    "demand_micro_E": 12000000,
+    "duration_seconds": 28,
+    "generation_micro_E": 0,
+    "housing": 0,
+    "income_micro_per_minute": 0,
+    "jobs": 60,
+    "recycling_per_minute": 0,
+    "reuse_per_minute": 0,
+    "services": 550,
+    "treatment_per_minute": 0,
+    "upkeep_micro_per_minute": 10000000,
+    "waste_per_minute": 0
+   },
+   "upgrade": {
+    "air_micro_per_minute": 0,
+    "collection_per_minute": 0,
+    "cost_micro": 95000000,
+    "demand_micro_E": 4000000,
+    "duration_seconds": 20,
+    "generation_micro_E": 0,
+    "housing": 0,
+    "income_micro_per_minute": 0,
+    "jobs": 30,
+    "recycling_per_minute": 0,
+    "reuse_per_minute": 0,
+    "services": 350,
+    "treatment_per_minute": 0,
+    "upkeep_micro_per_minute": 5000000,
+    "waste_per_minute": 0
+   },
+   "upgrade_unlock_micro": 20000000
+  },
+  "recovery_hub": {
+   "build_unlock_micro": 0,
+   "l1": {
+    "air_micro_per_minute": 0,
+    "collection_per_minute": 55,
+    "cost_micro": 170000000,
+    "demand_micro_E": 12000000,
+    "duration_seconds": 26,
+    "generation_micro_E": 0,
+    "housing": 0,
+    "income_micro_per_minute": 0,
+    "jobs": 80,
+    "recycling_per_minute": 0,
+    "reuse_per_minute": 0,
+    "services": 0,
+    "treatment_per_minute": 0,
+    "upkeep_micro_per_minute": 9000000,
+    "waste_per_minute": 0
+   },
+   "upgrade": {
+    "air_micro_per_minute": 0,
+    "collection_per_minute": 45,
+    "cost_micro": 100000000,
+    "demand_micro_E": 6000000,
+    "duration_seconds": 22,
+    "generation_micro_E": 0,
+    "housing": 0,
+    "income_micro_per_minute": 0,
+    "jobs": 40,
+    "recycling_per_minute": 0,
+    "reuse_per_minute": 0,
+    "services": 0,
+    "treatment_per_minute": 0,
+    "upkeep_micro_per_minute": 5000000,
+    "waste_per_minute": 0
+   },
+   "upgrade_unlock_micro": 20000000
+  },
+  "recycling_center": {
+   "build_unlock_micro": 0,
+   "l1": {
+    "air_micro_per_minute": 0,
+    "collection_per_minute": 0,
+    "cost_micro": 180000000,
+    "demand_micro_E": 16000000,
+    "duration_seconds": 34,
+    "generation_micro_E": 0,
+    "housing": 0,
+    "income_micro_per_minute": 0,
+    "jobs": 100,
+    "recycling_per_minute": 35,
+    "reuse_per_minute": 10,
+    "services": 0,
+    "treatment_per_minute": 0,
+    "upkeep_micro_per_minute": 9000000,
+    "waste_per_minute": 0
+   },
+   "upgrade": {
+    "air_micro_per_minute": 0,
+    "collection_per_minute": 0,
+    "cost_micro": 120000000,
+    "demand_micro_E": 8000000,
+    "duration_seconds": 26,
+    "generation_micro_E": 0,
+    "housing": 0,
+    "income_micro_per_minute": 0,
+    "jobs": 50,
+    "recycling_per_minute": 25,
+    "reuse_per_minute": 6,
+    "services": 0,
+    "treatment_per_minute": 0,
+    "upkeep_micro_per_minute": 5000000,
+    "waste_per_minute": 0
+   },
+   "upgrade_unlock_micro": 70000000
+  },
+  "renewable_power_plant": {
+   "build_unlock_micro": 0,
+   "l1": {
+    "air_micro_per_minute": 0,
+    "collection_per_minute": 0,
+    "cost_micro": 265000000,
+    "demand_micro_E": 0,
+    "duration_seconds": 42,
+    "generation_micro_E": 100000000,
+    "housing": 0,
+    "income_micro_per_minute": 0,
+    "jobs": 60,
+    "recycling_per_minute": 0,
+    "reuse_per_minute": 0,
+    "services": 0,
+    "treatment_per_minute": 0,
+    "upkeep_micro_per_minute": 11000000,
+    "waste_per_minute": 0
+   },
+   "upgrade": {
+    "air_micro_per_minute": 0,
+    "collection_per_minute": 0,
+    "cost_micro": 175000000,
+    "demand_micro_E": 0,
+    "duration_seconds": 30,
+    "generation_micro_E": 80000000,
+    "housing": 0,
+    "income_micro_per_minute": 0,
+    "jobs": 30,
+    "recycling_per_minute": 0,
+    "reuse_per_minute": 0,
+    "services": 0,
+    "treatment_per_minute": 0,
+    "upkeep_micro_per_minute": 6000000,
+    "waste_per_minute": 0
+   },
+   "upgrade_unlock_micro": 70000000
+  },
+  "residential_district": {
+   "build_unlock_micro": 0,
+   "l1": {
+    "air_micro_per_minute": 0,
+    "collection_per_minute": 0,
+    "cost_micro": 150000000,
+    "demand_micro_E": 0,
+    "duration_seconds": 22,
+    "generation_micro_E": 0,
+    "housing": 450,
+    "income_micro_per_minute": 0,
+    "jobs": 0,
+    "recycling_per_minute": 0,
+    "reuse_per_minute": 0,
+    "services": 0,
+    "treatment_per_minute": 0,
+    "upkeep_micro_per_minute": 5000000,
+    "waste_per_minute": 0
+   },
+   "upgrade": {
+    "air_micro_per_minute": 0,
+    "collection_per_minute": 0,
+    "cost_micro": 95000000,
+    "demand_micro_E": 0,
+    "duration_seconds": 18,
+    "generation_micro_E": 0,
+    "housing": 350,
+    "income_micro_per_minute": 0,
+    "jobs": 0,
+    "recycling_per_minute": 0,
+    "reuse_per_minute": 0,
+    "services": 0,
+    "treatment_per_minute": 0,
+    "upkeep_micro_per_minute": 3000000,
+    "waste_per_minute": 0
+   },
+   "upgrade_unlock_micro": 20000000
+  }
+ },
+ "construction_slots": 2,
+ "events": [
+  {
+   "end": 465,
+   "id": "smog_alert",
+   "start": 390,
+   "warning": 330
+  },
+  {
+   "end": 750,
+   "id": "waste_surge",
+   "start": 660,
+   "warning": 600
+  },
+  {
+   "end": 1005,
+   "id": "power_shortage",
+   "start": 930,
+   "warning": 870
+  },
+  {
+   "end": 1140,
+   "id": "equilibrium_2050",
+   "start": 1080,
+   "warning": 1020
+  }
+ ],
+ "foundations": {
+  "circular_foundation": {
+   "building": "recycling_center",
+   "money": 620
+  },
+  "energy_pioneer": {
+   "building": "renewable_power_plant",
+   "money": 520
+  },
+  "industrial_legacy": {
+   "building": "factory",
+   "money": 480
+  },
+  "investment_district": {
+   "building": "",
+   "money": 900
+  }
+ },
+ "grid": [
+  6,
+  6
+ ],
+ "market": {
+  "contract_limit": 2,
+  "duration": 90,
+  "prices": {
+   "electricity": {
+    "maximum": 450000,
+    "minimum": 150000,
+    "standard": 300000,
+    "step": 50000
+   },
+   "organic": {
+    "maximum": 1400000,
+    "minimum": 400000,
+    "standard": 800000,
+    "step": 100000
+   },
+   "recyclable": {
+    "maximum": 1600000,
+    "minimum": 600000,
+    "standard": 1000000,
+    "step": 100000
+   }
+  },
+  "quote_seconds": 10,
+  "selection_seconds": 10
+ },
+ "match_seconds": 1200,
+ "material_discount_percent": 25,
+ "migration": {
+  "first": 80,
+  "interval": 20
+ },
+ "policy": {
+  "policy_cooldown_seconds": 60,
+  "policy_fee_micro_per_minute": 18000000
+ },
+ "source": "config/balance/B1.json",
+ "source_sha256": "1e629a27d91e01f037bfb141b01c705f577de9142efd097a150a1ab7c4497881"
+}
