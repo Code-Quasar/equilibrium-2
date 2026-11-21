@@ -1,0 +1,1438 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EQUILIBRIUM protocol v1",
+  "description": "One UTF-8 JSON object per WebSocket text message. Integer-token JSON only; 32768 inbound bytes, depth 8, string 1024, container 64, 20 messages/second. Duplicate keys, fractions/exponents, trailing commas and unsafe integers rejected lexically. Response nested visibility is defined by player_view.gd allowlist.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/clientMessage"
+    },
+    {
+      "$ref": "#/$defs/serverMessage"
+    }
+  ],
+  "$defs": {
+    "clientMessage": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "hello"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "client": {
+              "enum": [
+                "terminal",
+                "godot",
+                "test"
+              ]
+            },
+            "client_version": {
+              "type": "string",
+              "maxLength": 64
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "client",
+            "client_version"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "create_lobby"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "join_lobby"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "join_code": {
+              "type": "string",
+              "maxLength": 1024
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "join_code"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "set_ready"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "ready": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "ready"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "start_match"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "choose_foundation"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "action_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "foundation": {
+              "type": "string",
+              "maxLength": 1024
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "action_id",
+            "foundation"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "rejoin"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "lobby_id": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "rejoin_token": {
+              "type": "string",
+              "maxLength": 1024
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "lobby_id",
+            "rejoin_token"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "submit_action"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "action_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "kind": {
+              "const": "construct"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "building_type": {
+                  "type": "string",
+                  "maxLength": 1024
+                },
+                "tile": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 35
+                }
+              },
+              "required": [
+                "building_type"
+              ],
+              "additionalProperties": false
+            },
+            "observed_tick": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1200
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "action_id",
+            "kind",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "submit_action"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "action_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "kind": {
+              "const": "set_reduce_waste"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "enabled"
+              ],
+              "additionalProperties": false
+            },
+            "observed_tick": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1200
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "action_id",
+            "kind",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "submit_action"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "action_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "kind": {
+              "const": "upgrade"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "building_id": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000000000
+                }
+              },
+              "required": [
+                "building_id"
+              ],
+              "additionalProperties": false
+            },
+            "observed_tick": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1200
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "action_id",
+            "kind",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "submit_action"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "action_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "kind": {
+              "const": "disable"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "building_id": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000000000
+                }
+              },
+              "required": [
+                "building_id"
+              ],
+              "additionalProperties": false
+            },
+            "observed_tick": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1200
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "action_id",
+            "kind",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "submit_action"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "action_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "kind": {
+              "const": "enable"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "building_id": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000000000
+                }
+              },
+              "required": [
+                "building_id"
+              ],
+              "additionalProperties": false
+            },
+            "observed_tick": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1200
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "action_id",
+            "kind",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "submit_action"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "action_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "kind": {
+              "const": "demolish"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "building_id": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000000000
+                }
+              },
+              "required": [
+                "building_id"
+              ],
+              "additionalProperties": false
+            },
+            "observed_tick": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1200
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "action_id",
+            "kind",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "submit_action"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "action_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "kind": {
+              "const": "cancel_project"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "building_id": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000000000
+                }
+              },
+              "required": [
+                "building_id"
+              ],
+              "additionalProperties": false
+            },
+            "observed_tick": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1200
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "action_id",
+            "kind",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "submit_action"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "action_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "kind": {
+              "const": "withdraw_offer"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000000000
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "observed_tick": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1200
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "action_id",
+            "kind",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "submit_action"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "action_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "kind": {
+              "const": "accept_quote"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000000000
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "observed_tick": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1200
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "action_id",
+            "kind",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "submit_action"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "action_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "kind": {
+              "const": "renew_contract"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000000000
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "observed_tick": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1200
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "action_id",
+            "kind",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "submit_action"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "action_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "kind": {
+              "const": "cancel_contract"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000000000
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            "observed_tick": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1200
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "action_id",
+            "kind",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "submit_action"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "action_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "kind": {
+              "const": "publish_offer"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "maxLength": 1024
+                },
+                "rate": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000000000
+                },
+                "price": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000000000
+                }
+              },
+              "required": [
+                "type",
+                "rate",
+                "price"
+              ],
+              "additionalProperties": false
+            },
+            "observed_tick": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1200
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "action_id",
+            "kind",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "submit_action"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "action_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "kind": {
+              "const": "submit_quote"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "maxLength": 1024
+                },
+                "rate": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000000000
+                },
+                "price": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000000000
+                },
+                "request_id": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000000000
+                }
+              },
+              "required": [
+                "type",
+                "rate",
+                "price",
+                "request_id"
+              ],
+              "additionalProperties": false
+            },
+            "observed_tick": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1200
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "action_id",
+            "kind",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "submit_action"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "action_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "kind": {
+              "const": "request_quotes"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "maxLength": 1024
+                },
+                "rate": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000000000
+                }
+              },
+              "required": [
+                "type",
+                "rate"
+              ],
+              "additionalProperties": false
+            },
+            "observed_tick": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1200
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "action_id",
+            "kind",
+            "payload"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "serverMessage": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "welcome"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "connection_id": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "server_version": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "limits": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "connection_id",
+            "server_version",
+            "limits"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "protocol_error"
+            },
+            "code": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "fatal": {
+              "type": "boolean"
+            },
+            "correlation_id": {
+              "type": "string",
+              "maxLength": 1024
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "code",
+            "fatal"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "seat_assigned"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "lobby_id": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "seat": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3
+            },
+            "host": {
+              "type": "boolean"
+            },
+            "rejoin_token": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "generation": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "lobby_id",
+            "seat",
+            "host",
+            "rejoin_token",
+            "generation"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "lobby_created"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "lobby_id": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "join_code": {
+              "type": "string",
+              "maxLength": 1024
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "lobby_id",
+            "join_code"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "lobby_state"
+            },
+            "lobby_id": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "lobby_rev": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "host_seat": {
+              "type": "integer",
+              "minimum": -1,
+              "maximum": 3
+            },
+            "phase": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "seats": {
+              "type": "array"
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "lobby_id",
+            "lobby_rev",
+            "host_seat",
+            "phase",
+            "seats"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "draft_state"
+            },
+            "match_id": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "order": {
+              "type": "array"
+            },
+            "choices": {
+              "type": "array"
+            },
+            "turn_seat": {
+              "type": "integer",
+              "minimum": -1,
+              "maximum": 3
+            },
+            "available_foundations": {
+              "type": "array"
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "match_id",
+            "order",
+            "choices",
+            "turn_seat",
+            "available_foundations"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "match_started"
+            },
+            "match_id": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "tick": {
+              "const": 0
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "match_id",
+            "tick"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "action_ack"
+            },
+            "action_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "phase": {
+              "enum": [
+                "admission",
+                "execution"
+              ]
+            },
+            "status": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "server_tick": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "execution_tick": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "action_id",
+            "phase",
+            "status",
+            "server_tick"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "player_view"
+            },
+            "match_id": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "tick": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "view_seq": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "public": {
+              "type": "object"
+            },
+            "own_city": {
+              "type": "object"
+            },
+            "opponents": {
+              "type": "array"
+            },
+            "marketplace": {
+              "type": "object"
+            },
+            "notifications": {
+              "type": "array"
+            },
+            "final_result": {
+              "type": [
+                "object",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "match_id",
+            "tick",
+            "view_seq",
+            "public",
+            "own_city",
+            "opponents",
+            "marketplace",
+            "notifications",
+            "final_result"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "match_cancelled"
+            },
+            "reason": {
+              "const": "draft_rejoin_timeout"
+            },
+            "seat": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "reason",
+            "seat"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "match_finished"
+            },
+            "winners": {
+              "type": "array"
+            },
+            "duration": {
+              "const": 1200
+            },
+            "canonical_sha256": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "rankings": {
+              "type": "array"
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "winners",
+            "duration",
+            "canonical_sha256",
+            "rankings"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

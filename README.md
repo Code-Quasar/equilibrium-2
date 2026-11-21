@@ -1,8 +1,10 @@
 # EQUILIBRIUM
 
-### Deterministic Circular-Economy Simulation Engine
+### Deterministic Circular-Economy Strategy Game
 
-EQUILIBRIUM is an authoritative Godot simulation for a four-city strategy game. Over a fixed 1,200-second match, cities compete for a conserved regional population by developing housing, employment and services while managing electricity, waste, pollution, municipal finances and inter-city contracts.
+EQUILIBRIUM is a monorepo for a four-city online-first strategy game. Its authoritative Godot simulation, WebSocket server and network terminal client support private four-city matches with one to four humans and bots in vacant seats.
+
+Over a fixed 1,200-second match, cities compete for a conserved regional population by developing housing, employment and services while managing electricity, waste, pollution, municipal finances and inter-city contracts.
 
 Population moves at deterministic migration intervals according to Satisfaction, housing capacity and regional movement limits. Satisfaction derives from employment, housing, public services, electricity reliability and Environment. Construction, circular processing, energy supply and marketplace commitments therefore affect the same population-based victory objective through explicit economic and environmental consequences.
 
@@ -27,15 +29,18 @@ Godot 4.5.1 runs the authoritative simulation without scenes, rendering or wall-
 - `simulation/interfaces/` exposes Foundation drafting, local sessions and a versioned JSON-lines adapter.
 - `simulation/projections/` contains read-only derived insights.
 - `simulation/match.gd` composes the complete production engine.
+- `server/` hosts the authoritative multiplayer runtime.
+- `shared/` defines the versioned WebSocket JSON protocol.
+- `client/terminal/` contains the minimal network CLI.
 
 See [architecture](docs/architecture.md) and [deterministic execution](docs/deterministic-execution.md).
 
 ## Requirements
 
 - Godot 4.5.1
-- Python 3.9 or later only for the static repository checker
+- Python 3.9 or later for the static repository checker and optional network terminal client
 
-No third-party Python packages are required.
+The engine and repository checker need no Python packages. The optional terminal client requires the pinned dependency in `client/terminal/requirements.txt`.
 
 ## Run headlessly
 
@@ -74,4 +79,4 @@ The Godot entry point runs production regression suites, opening checks and five
 
 ## Scope
 
-This repository contains the authoritative simulation engine. Rendering clients, Android packaging and remote multiplayer transport remain outside the current implementation.
+The existing simulation is the only gameplay authority. See [server operation](server/README.md) and [terminal client](client/terminal/README.md) for multiplayer launch commands. Graphical rendering, Android packaging, public hosting and process-crash persistence remain outside the implementation.

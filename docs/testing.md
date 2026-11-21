@@ -32,6 +32,10 @@ godot --headless --path . --script tests/integration/local_protocol.gd
 
 `tests/support/` contains focused fixtures and scenario builders for production systems.
 
+## Online multiplayer
+
+The [server checks](../server/README.md#checks) cover protocol/schema agreement, authorization, scheduling, recursive player-view privacy, draft disconnect recovery, a complete marketplace settlement, real socket fixtures for all four human/bot occupancy combinations, and the terminal CLI. The complete injected-clock application test is a separate, longer check. Full-duration completion over continuously connected sockets is not accelerated through the public protocol.
+
 ## Clean import
 
 For publication checks, copy retained source into a clean directory without `.godot/`, local environments or outputs, then run a Godot headless import and the complete suite. Retain `.gd.uid` sidecars with their scripts.
