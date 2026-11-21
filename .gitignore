@@ -1,0 +1,10 @@
+# Godot generated files
+.godot/
+
+# Local Python environment
+.venv/
+__pycache__/
+
+# Generated outputs
+outputs/
+*.log
