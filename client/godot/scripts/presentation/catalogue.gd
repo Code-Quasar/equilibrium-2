@@ -1,60 +1,64 @@
 class_name Catalogue
 extends RefCounted
 ## Display text and number formatting. Names, descriptions and error wording
-## live here; figures (costs, build times, unlocks, the event schedule) come
-## from data/catalogue.json, exported from the frozen B1 file, and are shown
-## for orientation only: the server decides every action.
+## live here; figures (prices, build times, capacities, prerequisites, the
+## crisis schedule) come from data/catalogue.json, exported from the live B2.1
+## file, and are shown for orientation only: the server decides every action.
 
 const MICRO := 1000000.0
 
-## Building identity: name, short role, menu group and the sprite family it is
-## drawn with (Level 1 uses the small sprite, Level 2 the medium one).
+## Building identity: name and short role. The order is the build bar's order.
 const BUILDINGS := {
-	"residential_district": ["Residential District", "Homes for 450 residents", "city", "residential"],
-	"commercial_district": ["Commercial District", "Jobs and cleaner income", "city", "commercial"],
-	"factory": ["Factory", "Many jobs and income; dirty, power-hungry, extra waste", "city", "small_factory"],
-	"public_services_center": ["Public Services Center", "Service capacity for satisfaction", "city", "hospital"],
-	"recovery_hub": ["Recovery Hub", "Collects street waste and sorts it", "circular", "recovery_hub"],
-	"recycling_center": ["Recycling Center", "Recyclables → recovered materials", "circular", "recycling_center"],
-	"biogas_facility": ["Biogas Facility", "Organic waste → electricity", "circular", "biogas_plant"],
-	"landfill": ["Landfill", "Residual waste disposal, damages the environment", "circular", "landfill"],
-	"fossil_power_plant": ["Fossil Power Plant", "Fast, cheap, dirty power", "energy", "fossil_plant"],
-	"renewable_power_plant": ["Renewable Power Plant", "Clean power", "energy", "renewable_plant"],
-	"green_space": ["Green Space", "Cleans the air", "energy", "park"],
+	"residential_district": ["Residential District", "Homes: the only way to take in more residents"],
+	"commercial_district": ["Commercial District", "Jobs and income with little waste or smoke"],
+	"factory": ["Factory", "Many jobs and income; uses materials, power, makes waste and smoke"],
+	"public_services_center": ["Public Services Center", "Service capacity for Satisfaction"],
+	"park": ["Park", "Cleans the air and adds amenity; cannot clear waste or landfill damage"],
+	"collection_center": ["Collection Center", "Collects street waste and salvages some recyclables"],
+	"sorting_center": ["Sorting Center", "Sorts collected waste and reuses part of the recyclables"],
+	"recycling_center": ["Recycling Center", "Turns sorted recyclables into materials"],
+	"biogas_facility": ["Biogas Facility", "Turns sorted organic waste into electricity"],
+	"landfill": ["Landfill", "Takes what is left, for a fee and lasting damage"],
+	"fossil_power_plant": ["Fossil Power Plant", "Fast, cheap, dirty power"],
+	"renewable_power_plant": ["Renewable Power Plant", "Clean power"],
 }
-const GROUPS := [["city", "City"], ["circular", "Circular economy"], ["energy", "Energy & nature"]]
+const SIZES := {"S": "Small", "M": "Medium", "L": "Large"}
+const NEXT_SIZE := {"S": "M", "M": "L"}
 
 const FOUNDATIONS := {
-	"industrial_legacy": ["Industrial Legacy", "Starts with a Factory: jobs and cash now, tight power, extra waste.", "small_factory_m"],
-	"circular_foundation": ["Circular Foundation", "Starts with a Recycling Center: turns household recyclables into materials from the first minute.", "recycling_center_m"],
-	"energy_pioneer": ["Energy Pioneer", "Starts with a Renewable Power Plant: surplus clean power to grow on or to sell.", "renewable_plant_m"],
-	"investment_district": ["Investment District", "No building, the most cash: the most flexible opening.", "commercial_m"],
+	"industrial_legacy": ["Industrial Legacy", "Starts with a Factory: jobs and income now, but it eats materials and power and makes waste."],
+	"circular_foundation": ["Circular Foundation", "Starts with a Collection and a Sorting Center: recovers materials from the first minute, and can build a Recycling Center at once."],
+	"energy_pioneer": ["Energy Pioneer", "Starts with a Renewable Power Plant: spare clean power to grow on or to sell."],
+	"investment_district": ["Investment District", "No building, the most cash: the most flexible opening."],
 }
 
 const EVENTS := {
-	"smog_alert": ["Smog Alert", "Air pollution hits harder"],
+	"smog_alert": ["Smog Alert", "Emissions count 50 % more and the air recovers at half speed"],
 	"waste_surge": ["Waste Surge", "Much more household and business waste"],
-	"power_shortage": ["Power Shortage", "Less municipal electricity"],
-	"equilibrium_2050": ["EQUILIBRIUM 2050", "More waste, less power, worse air at once"],
+	"power_shortage": ["Power Shortage", "The municipal grid gives 45 % less power"],
+	"equilibrium_2050": ["EQUILIBRIUM 2050", "The final reckoning: the match ends"],
 }
 
-const SERVICES := {"recyclable": "Recyclable treatment", "organic": "Organic treatment", "electricity": "Electricity"}
+const SERVICES := {"electricity": "Electricity", "recyclable": "Recyclable treatment", "organic": "Organic treatment"}
 const WASTE := ["Recyclable", "Organic", "Residual"]
 
 const ERRORS := {
 	"insufficient_funds": "Not enough money",
+	"insufficient_materials": "Not that many materials in stock",
 	"construction_slots_full": "Both construction slots are busy",
-	"development_locked": "Needs more Development",
-	"tile_occupied": "That tile is taken",
-	"no_free_tile": "No free tile left",
+	"requires_collection_center": "Needs a finished Collection Center first",
+	"requires_sorting_center": "Needs a finished Sorting Center first",
+	"prerequisite_under_construction": "Its required building is still being built",
+	"dependent_buildings_exist": "Other buildings depend on it",
+	"housing_below_population": "Residents would lose their homes",
+	"tile_occupied": "That site is taken",
+	"no_free_tile": "No free site left",
 	"not_enough_time": "It would not finish before the match ends",
-	"maximum_level": "Already at the highest level",
+	"maximum_size": "Already Large",
 	"already_upgrading": "Already being upgraded",
 	"not_complete": "Still under construction",
 	"cancel_project_first": "Cancel its project first",
 	"no_active_project": "No project to cancel",
-	"policy_cooldown": "The policy was changed too recently",
-	"already_set": "Already set that way",
 	"reactivation_cooldown": "It was switched off too recently",
 	"already_enabled": "Already on",
 	"already_disabled": "Already off",
@@ -70,15 +74,17 @@ const ERRORS := {
 	"invalid_phase": "Not possible right now",
 	"authentication_failed": "Your seat could not be restored",
 	"rate_limited": "Too many requests",
-	"no_eligible_buyer_need": "Nobody needs that service right now",
 	"insufficient_seller_capacity": "Not enough spare capacity to sell",
+	"offer_limit": "You already have the most open offers allowed",
 	"offer_unavailable": "That offer is gone",
-	"quote_window_closed": "The quote window has closed",
-	"selection_window_closed": "The selection window has closed",
-	"contract_limit": "Contract limit reached",
+	"offer_not_owned": "Not your offer",
+	"contract_limit": "You already hold the most contracts allowed",
+	"duplicate_contract": "You already buy that from this city",
+	"contract_unavailable": "That contract has ended",
+	"contract_not_owned": "Not your contract",
 	"self_contract": "You cannot trade with yourself",
-	"invalid_rate": "Rate outside the allowed range",
-	"invalid_price": "Price outside the allowed band",
+	"invalid_rate": "Amount outside the allowed range",
+	"invalid_duration": "Contracts last 1 to 5 minutes",
 	"timeout": "The server did not answer",
 	"refused": "The server refused the connection",
 	"bad_address": "That server address is not valid",
@@ -110,21 +116,44 @@ static func role(t: String) -> String:
 	return BUILDINGS.get(t, ["", ""])[1]
 
 
-static func group(t: String) -> String:
-	return BUILDINGS.get(t, ["", "", "city"])[2]
+static func size_name(size: String) -> String:
+	return SIZES.get(size, size)
 
 
-static func sprite(t: String, level: int) -> String:
-	var base: String = BUILDINGS.get(t, ["", "", "", "commercial"])[3]
-	return "%s_%s" % [base, "m" if level >= 2 else "s"]
+## A tier's figures as exported; a figure a tier does not list is zero.
+static func tier(t: String, size: String) -> Dictionary:
+	return data().get("buildings", {}).get(t, {}).get(size, {})
 
 
-static func spec(t: String) -> Dictionary:
-	return data().get("buildings", {}).get(t, {})
+static func figure(t: String, size: String, key: String) -> float:
+	return float(tier(t, size).get(key, 0))
+
+
+## The incremental price of upgrading to size: {additional_credits, additional_materials, seconds}.
+static func upgrade_to(t: String, size: String) -> Dictionary:
+	var from: String = {"M": "S", "L": "M"}.get(size, "")
+	return tier(t, size).get("upgrade_from_" + from, {}) if from != "" else {}
+
+
+static func requires(t: String) -> Array:
+	return data().get("buildings", {}).get(t, {}).get("required_completed_buildings", [])
+
+
+## Credits, materials and seconds as one short line, e.g. "💰 125 + 9 mat · ⏱ 0:25".
+static func price_text(credits: float, materials: float, seconds: int) -> String:
+	return "💰 %s + %s mat · ⏱ %s" % [fmt(credits), fmt(materials), clock(seconds)]
 
 
 static func event_name(id: String) -> String:
 	return EVENTS.get(id, [id.capitalize()])[0]
+
+
+## The crisis schedule entry for id, or {}.
+static func crisis(id: String) -> Dictionary:
+	for c in data().get("crises", []):
+		if c["id"] == id:
+			return c
+	return {}
 
 
 ## A micro-unit amount as a short display number.
@@ -148,19 +177,3 @@ static func fmt(n: float) -> String:
 static func clock(seconds: int) -> String:
 	seconds = maxi(seconds, 0)
 	return "%d:%02d" % [seconds / 60, seconds % 60]
-
-
-## Why a finished building is not running, in a word or two.
-static func state_text(b: Dictionary) -> String:
-	if not b.get("enabled", true):
-		return "switched off"
-	if not b.get("funded", true):
-		return "unfunded"
-	var pf: Variant = b.get("power_factor_micro")
-	if pf != null and int(pf) < 1000000:
-		return "low power"
-	return "idle"
-
-
-static func ordinal(n: int) -> String:
-	return "#%d" % n

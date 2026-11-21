@@ -101,7 +101,7 @@ func _process(delta: float) -> bool:
 				go()
 		4:
 			var L: CityLayout = app.map.layout
-			# Near: a Green Space beside the main road. Far: houses in a corner.
+			# Near: a Park beside the main road. Far: houses in a corner.
 			var near_at := L.spot_beside_main()
 			var mp := near_at
 			var far_at := Vector2i(-1, -1)
@@ -113,7 +113,7 @@ func _process(delta: float) -> bool:
 			play()._snap(far_at + Vector2i(1, 1))
 			far_tile = play()._free_tile()
 			play()._confirm_place()
-			play().start_placing("green_space")
+			play().start_placing("park")
 			play()._snap(near_at + Vector2i(1, 1))
 			near_tile = play()._free_tile()
 			play()._confirm_place()

@@ -1,6 +1,6 @@
 extends SceneTree
 ## Two graphical-client sessions against a real running server (protocol v1):
-## create, join, ready, start, draft, build with receipts, a market request,
+## create, join, ready, start, draft, build with receipts, a market offer,
 ## a disconnect and rejoin of the same seat, and isolation between seats.
 ##
 ##   godot --headless --path client/godot --script res://tests/two_players.gd -- ws://127.0.0.1:9080
@@ -27,9 +27,17 @@ func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0:
 		url = args[0]
-	ok(Catalogue.data().get("source_sha256", "") == "1e629a27d91e01f037bfb141b01c705f577de9142efd097a150a1ab7c4497881", "display catalogue matches frozen B1")
+	var live := FileAccess.get_file_as_bytes(ProjectSettings.globalize_path("res://").path_join("../../config/balance/B2_1.json").simplify_path())
+	ok(not live.is_empty() and Catalogue.data().get("source_sha256", "") == _sha256(live), "display catalogue matches the live B2.1 configuration")
 	a = _session("user://test_a.cfg")
 	b = _session("user://test_b.cfg")
+
+
+static func _sha256(bytes: PackedByteArray) -> String:
+	var h := HashingContext.new()
+	h.start(HashingContext.HASH_SHA256)
+	h.update(bytes)
+	return h.finish().hex_encode()
 
 
 func _session(path: String) -> Session:
@@ -100,7 +108,7 @@ func _process(delta: float) -> bool:
 				ok(not a.view.has("cities"), "no other city's private state in the view")
 				next()
 		8:
-			built_id = a.act("construct", {"building_type": "residential_district", "tile": 14}, "Build Residential District")
+			built_id = a.act("construct", {"building_type": "residential_district", "size": "S", "tile": 14}, "Build Residential District")
 			ok(a.actions[built_id]["status"] == "sending", "action shown as sending, not done")
 			next()
 		9:
@@ -114,17 +122,18 @@ func _process(delta: float) -> bool:
 				if int(bl["tile"]) == 14:
 					found = bl
 			ok(not found.is_empty() and found["status"] != "complete", "building appears on tile 14 under construction")
-			var bad := a.act("construct", {"building_type": "landfill", "tile": 14}, "Build Landfill")
+			var bad := a.act("construct", {"building_type": "landfill", "size": "S", "tile": 14}, "Build Landfill")
 			built_id = bad
 			next()
 		11:
 			if a.actions[built_id]["status"] in ["applied", "rejected"]:
 				ok(a.actions[built_id]["status"] == "rejected" and a.actions[built_id]["error"] == "tile_occupied", "occupied tile rejected with a reason (%s)" % a.actions[built_id]["error"])
-				built_id = b.act("request_quotes", {"type": "electricity", "rate": 5000000}, "Request Electricity")
+				built_id = b.act("publish_offer", {"type": "electricity", "rate": 5000000}, "Offer Electricity")
 				next()
 		12:
 			if b.actions[built_id]["status"] in ["applied", "rejected"]:
-				ok(true, "market request answered by the server (%s %s)" % [b.actions[built_id]["status"], b.actions[built_id]["error"]])
+				ok(true, "market offer answered by the server (%s %s)" % [b.actions[built_id]["status"], b.actions[built_id]["error"]])
+				ok(not a.view["own_city"].get("build_options", {}).is_empty(), "views carry the server's build options")
 				# Seat isolation: b's view never contains a's buildings.
 				var mine := 0
 				for bl in b.view["own_city"]["buildings"]:

@@ -38,14 +38,15 @@ async def run(args):
                     if credentials:
                         fd = os.open(credentials, os.O_CREAT | os.O_TRUNC | os.O_WRONLY, 0o600)
                         with os.fdopen(fd, "w") as out:
-                            os.fchmod(out.fileno(), 0o600)
+                            if hasattr(os, "fchmod"):  # POSIX; Windows has no owner-only mode bits
+                                os.fchmod(out.fileno(), 0o600)
                             json.dump({k: m[k] for k in ("lobby_id", "rejoin_token")}, out)
                     m = {k: v for k, v in m.items() if k != "rejoin_token"}
                 if m["type"] == "player_view" and not args.json:
                     c = m["own_city"]
                     print(f"tick={m['tick']} city={c['city_id']} population={c['population']} "
-                          f"money_micro={c['money_micro']} environment_micro={c['environment_micro']} "
-                          f"development_micro={c['development_micro']}", flush=True)
+                          f"money_micro={c['money_micro']} materials_micro={c['materials_micro']} "
+                          f"environment_micro={c['environment_micro']} satisfaction_micro={c['satisfaction_micro']}", flush=True)
                 else:
                     print(json.dumps(m), flush=True)
 

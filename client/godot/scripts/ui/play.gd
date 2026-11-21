@@ -5,16 +5,27 @@ extends Control
 ## missing. No reports. Every number comes from the last player_view and every
 ## button sends an action whose server receipt is shown.
 
-const PANELS := ["market", "rivals", "building", "policy"]
+const PANELS := ["market", "rivals", "building", "waste"]
 ## City needs: key, badge, short name, what to build when short.
 const NEEDS := [
 	["homes", "homes", "Homes", "Short of homes: build a Residential District."],
 	["jobs", "jobs", "Jobs", "Not enough jobs: build a Commercial District or a Factory."],
 	["power", "power", "Power", "Not enough electricity: build a power plant, or buy power in Trade."],
 	["services", "people", "Services", "Not enough services: build a Public Services Center."],
-	["waste", "waste", "Street waste", "Waste is piling up: build a Recovery Hub to collect it."],
-	["air", "pollution", "Environment", "Environment drives residents: Green Space cleans the air; fewer factories and landfills help."],
+	["waste", "waste", "Street waste", "Waste is piling up on the street: build a Collection Center, or a bigger one."],
+	["air", "pollution", "Environment", "Environment drives residents: parks clean the air; fewer factories, fossil plants and less landfill help."],
 ]
+## Why a building cannot be started, on its build card.
+const LOCKS := {
+	"requires_collection_center": "Needs Collection",
+	"requires_sorting_center": "Needs Sorting",
+	"prerequisite_under_construction": "Wait for it",
+	"construction_slots_full": "Busy",
+	"insufficient_funds": "Too costly",
+	"not_enough_time": "No time",
+	"no_free_tile": "No site",
+	"match_closed": "Over",
+}
 ## What a bubble over a building means.
 const BUBBLES := {
 	"road": "Needs a road to the main road",
@@ -31,11 +42,13 @@ var toast: Callable
 var open_settings: Callable = func(): pass
 
 var map: CityMap                  # the world map; App owns it, this screen drives it
-var placing := {}                 # {type, at, ok, why}: a building being dragged into place
+var placing := {}                 # {type, size, at, ok, why}: a building being dragged into place
 var tab := ""                     # "", "build", or a panel in PANELS
 var selected := -1
 var confirm := ""                 # action awaiting a second tap (demolish, cancel)
-var market_form := {"type": "electricity", "rate": 5, "price": 0}
+var market_form := {"type": "electricity", "rate": 5, "duration": 120}
+var build_size := "S"             # the size the build bar shows and places
+var sell_amount := 10
 
 var _reserved := {}               # tile -> action id of a construction on its way
 var _card_drag := {}              # a build card pressed, before it becomes a drag
@@ -45,7 +58,8 @@ var _panel: PanelContainer
 var _panel_title: Label
 var _body: VBoxContainer
 var _drawer: PanelContainer
-var _drawer_cards := {}           # building type -> {button, price}
+var _drawer_cards := {}           # building type -> {button, price, thumb}
+var _size_buttons := {}           # size -> its button in the build bar
 var _activity: VBoxContainer
 var _banner: PanelContainer
 var _blockers: Array[Control] = []
@@ -205,11 +219,11 @@ func _build() -> void:
 	_blockers.append(zoom)
 	_zoom = zoom
 
-	# Bottom left: trade, rivals, waste policy.
+	# Bottom left: trade, rivals, waste and materials.
 	var bl := UI.hbox(12)
 	bl.add_child(UI.round_button("btn_blue", "trade", "Trade", func(): _open("market")))
 	bl.add_child(UI.round_button("btn_blue", "region", "Rivals", func(): _open("rivals")))
-	bl.add_child(UI.round_button("btn_green", "waste", "Policy", func(): _open("policy")))
+	bl.add_child(UI.round_button("btn_green", "waste", "Waste", func(): _open("waste")))
 	bl.add_child(UI.round_button("btn_purple", "settings", "Settings", func(): _open(""); open_settings.call()))
 	_blockers.append(_corner(Control.PRESET_BOTTOM_LEFT, 14, 10, bl))
 	_own_controls.append(bl)
@@ -241,7 +255,7 @@ func _build() -> void:
 	add_child(_visit_bar)
 	_blockers.append(_visit_bar)
 
-	# The build bar: every building in a row; drag one up onto the map.
+	# The build bar: a size choice, then every building in a row; drag one up onto the map.
 	var scroll := ScrollContainer.new()
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.scroll_deadzone = 8
@@ -250,23 +264,26 @@ func _build() -> void:
 	for t in Catalogue.BUILDINGS:
 		cards.add_child(_drawer_card(t))
 	UI.pass_touches(cards)
-	_drawer = UI.panel("Side", scroll)
+	_drawer = UI.panel("Side", UI.vbox(6, [_size_row(), scroll]))
 	_drawer.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	_drawer.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_drawer.offset_left = 10
 	_drawer.offset_right = -110
 	_drawer.offset_bottom = -8
-	_drawer.offset_top = -190
+	_drawer.offset_top = -236
 	_drawer.visible = false
 	add_child(_drawer)
 	_blockers.append(_drawer)
 
-	# One panel on the right for trade, rivals, a building, or the policy.
+	# One panel on the right for trade, rivals, a building, or waste and materials.
 	var pv := UI.vbox(8)
 	var head := UI.hbox()
 	_panel_title = UI.label("", "Title")
+	# A long name must not widen the panel: it is cut with an ellipsis instead.
+	_panel_title.clip_text = true
+	_panel_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_panel_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(_panel_title)
-	head.add_child(UI.spacer())
 	head.add_child(UI.round_button("btn_red", "close", "", func(): selected = -1; _open(""), 40))
 	pv.add_child(head)
 	var ps := ScrollContainer.new()
@@ -325,7 +342,7 @@ func _drawer_card(t: String) -> Control:
 	var box := UI.vbox(2)
 	box.custom_minimum_size = Vector2(132, 0)
 	var thumb := TextureRect.new()
-	thumb.texture = UI.thumbs.get_thumb(t, 1)
+	thumb.texture = UI.thumbs.get_thumb(t, build_size)
 	thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	thumb.custom_minimum_size = Vector2(120, 80)
@@ -345,29 +362,50 @@ func _drawer_card(t: String) -> Control:
 	card.mouse_filter = Control.MOUSE_FILTER_PASS
 	card.gui_input.connect(func(e): _card_input(e, t, not b.disabled))
 	thumb.gui_input.connect(func(e): _card_input(e, t, not b.disabled))
-	_drawer_cards[t] = {"button": b, "price": price}
+	_drawer_cards[t] = {"button": b, "price": price, "thumb": thumb}
 	return card
 
 
-## Prices, locks and money update in place, so a card being pressed is never
-## rebuilt under the finger.
-func _drawer_refresh() -> void:
-	var o := own()
-	var dev := int(o.get("development_micro", 0))
-	var cash := int(o.get("available_money_micro", 0))
-	var mats := int(o.get("materials_micro", 0))
-	var disc := int(Catalogue.data().get("material_discount_percent", 0))
-	var free := _slots_free()
+## The build bar's size choice: every card shows and places that size.
+func _size_row() -> Control:
+	var row := UI.hbox(8)
+	row.add_child(UI.label("Size", "Caption"))
+	for s in Catalogue.SIZES:
+		var size: String = s
+		var b := UI.button(Catalogue.size_name(size), "PrimaryButton" if size == build_size else "SoftButton", "", func(): _set_build_size(size))
+		b.custom_minimum_size = Vector2(96, 34)
+		b.add_theme_font_size_override("font_size", 13)
+		_size_buttons[size] = b
+		row.add_child(b)
+	var note := UI.label("Upgrading later costs a little more than building big now.", "Small", true)
+	note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(note)
+	return row
+
+
+func _set_build_size(size: String) -> void:
+	build_size = size
+	for s in _size_buttons:
+		_size_buttons[s].theme_type_variation = "PrimaryButton" if s == size else "SoftButton"
 	for t in _drawer_cards:
-		var s := Catalogue.spec(t)
-		var cost := int(s.get("l1", {}).get("cost_micro", 0))
-		var pay := cost - mini(mats, cost * disc / 100)
-		var locked := dev < int(s.get("build_unlock_micro", 0))
+		_drawer_cards[t]["thumb"].texture = UI.thumbs.get_thumb(t, size)
+	_drawer_refresh()
+
+
+## Prices and locks update in place, so a card being pressed is never rebuilt
+## under the finger. Whether a building can start comes from the server's own
+## check in the last view; the figures are the exported catalogue's.
+func _drawer_refresh() -> void:
+	var options: Dictionary = own().get("build_options", {})
+	for t in _drawer_cards:
+		var tier := Catalogue.tier(t, build_size)
+		var why := str(options.get(t, {}).get(build_size, "unknown"))
 		var c: Dictionary = _drawer_cards[t]
 		var b: Button = c["button"]
-		c["price"].text = ("🔒 Dev %s" % Catalogue.micro(s["build_unlock_micro"])) if locked else "💰 %s · ⏱ %s" % [Catalogue.micro(pay), Catalogue.clock(int(s.get("l1", {}).get("duration_seconds", 0)))]
-		b.disabled = locked
-		b.text = "Locked" if locked else ("Busy" if free == 0 else ("Too costly" if cash < pay else "Place"))
+		c["price"].text = Catalogue.price_text(float(tier.get("construction_credits", 0)), float(tier.get("construction_materials", 0)), int(tier.get("construction_seconds", 0)))
+		b.disabled = why != ""
+		b.text = "Place" if why == "" else LOCKS.get(why, "Not now")
+		b.tooltip_text = "" if why == "" else (Catalogue.error_text(why) if Catalogue.error_text(why) != "" else why.replace("_", " "))
 
 
 ## Tests only: put the camera back after an input check.
@@ -489,7 +527,8 @@ func _hud_refresh() -> void:
 		_hist.append([t, int(o.get("money_micro", 0)), int(o.get("population", 0)), int(o.get("materials_micro", 0))])
 		if _hist.size() > 90:
 			_hist.pop_front()
-	var sat := float(o.get("satisfaction_micro", 0) if o.get("satisfaction_micro") != null else 0) / Catalogue.MICRO
+	var evaluated: bool = o.get("satisfaction_micro") != null
+	var sat := float(o.get("satisfaction_micro", 0) if evaluated else 0) / Catalogue.MICRO
 	_gauge.value = sat
 	_pop_card.set_value("%s%s" % [Catalogue.fmt(o.get("population", 0)), ("  %+d" % _pop_delta) if _pop_delta != 0 else ""])
 	_rank_label.text = "   Rank #%d of 4" % _rank()
@@ -502,30 +541,57 @@ func _hud_refresh() -> void:
 	_net.add_theme_color_override("font_color", Color("#f28a72"))
 	_diag_refresh()
 	# What the city has against what it needs. Homes and services count in full
-	# at 115 % of residents, as in Satisfaction.
+	# at the Satisfaction comfort level (115 % of residents).
 	var cap: Dictionary = o.get("capacity", {})
-	var e: Dictionary = o.get("electricity", {})
+	var p: Dictionary = o.get("power", {})
 	var pop := float(o.get("population", 0))
-	var req := pop * 1.15
-	var street := 0.0
-	for x in o.get("uncollected_micro", []):
-		street += float(x) / Catalogue.MICRO
 	var rows := {
-		"homes": [float(cap.get("housing", 0)), req],
-		"jobs": [float(cap.get("potential_jobs", 0)), pop],
-		"power": [float(e.get("delivered", 0)) / Catalogue.MICRO, float(e.get("demand", 0)) / Catalogue.MICRO],
-		"services": [float(cap.get("services_micro", 0)) / Catalogue.MICRO, req],
+		"homes": [float(cap.get("housing", 0)), pop * _slack("housing_slack")],
+		"jobs": [float(cap.get("employed", 0)), pop],
+		"power": [_delivered_power(p), _requested_power(p)],
+		"services": [float(cap.get("services_micro", 0)) / Catalogue.MICRO, pop * _slack("services_slack")],
 	}
 	for k in rows:
 		var have: float = rows[k][0]
 		var need: float = rows[k][1]
 		var st := "ok" if have >= need * 0.999 else ("warn" if have >= need * 0.85 else "bad")
-		_need_chips[k].set_value("%s/%s" % [UI.compact(have), UI.compact(need)], st)
+		_need_chips[k].set_value("%s/%s" % [UI.compact(have), UI.compact(need)], st if evaluated else "")
+	var street := _sum(o.get("street_micro", [])) / Catalogue.MICRO
 	_need_chips["waste"].set_value(UI.compact(street), "ok" if street < 1.0 else ("warn" if street < 20.0 else "bad"))
 	var env := float(o.get("environment_micro", 0)) / Catalogue.MICRO
 	_need_chips["air"].set_value("%d%%" % int(round(env)), "ok" if env >= 70.0 else ("warn" if env >= 50.0 else "bad"))
 	if _popover and is_instance_valid(_popover) and _popover.visible:
 		_details(str(_popover.get_meta("key")), null)
+
+
+static func _sum(values: Array) -> float:
+	var total := 0.0
+	for x in values:
+		total += float(x)
+	return total
+
+
+static func _slack(key: String) -> float:
+	return float(Catalogue.data().get(key, 1.15))
+
+
+static func _delivered_power(p: Dictionary) -> float:
+	return float(int(p.get("municipal_delivered_micro_E", 0)) + int(p.get("buildings_delivered_micro_E", 0))) / Catalogue.MICRO
+
+
+static func _requested_power(p: Dictionary) -> float:
+	return float(int(p.get("municipal_requested_micro_E", 0)) + int(p.get("buildings_requested_micro_E", 0))) / Catalogue.MICRO
+
+
+## Seconds until the next move of residents, or -1 when none is left.
+func _next_migration() -> int:
+	var mig: Dictionary = Catalogue.data().get("migration", {})
+	var first := int(mig.get("first", 80))
+	var last := int(mig.get("last", 1180))
+	var every := int(mig.get("interval", 20))
+	var t := tick()
+	var next := first if t < first else first + ((t - first) / every + 1) * every
+	return next - t if next <= last else -1
 
 
 ## The change of a tracked figure per minute, from the snapshots received
@@ -613,9 +679,9 @@ func close_details() -> bool:
 
 func _detail_rows(key: String) -> Array:
 	var o := own()
-	var M := Catalogue.MICRO
 	var cap: Dictionary = o.get("capacity", {})
-	var e: Dictionary = o.get("electricity", {})
+	var p: Dictionary = o.get("power", {})
+	var w: Dictionary = o.get("waste", {}).get("totals", {})
 	var pop := float(o.get("population", 0))
 	var good := Color("#69e0b4")
 	var bad := Color("#ff9c8a")
@@ -624,74 +690,89 @@ func _detail_rows(key: String) -> Array:
 	match key:
 		"satisfaction":
 			var c: Dictionary = o.get("satisfaction_components_micro", {})
-			var out: Array = ["Satisfaction %s" % Catalogue.micro(o.get("satisfaction_micro", 0), 1)]
+			var out: Array = ["Satisfaction %s" % (Catalogue.micro(o["satisfaction_micro"], 1) if o.get("satisfaction_micro") != null else "–")]
 			for part in [["housing", "Homes"], ["employment", "Jobs"], ["services", "Services"], ["power", "Power"], ["environment", "Environment"]]:
 				if c.has(part[0]):
 					out.append([part[1], Catalogue.micro(c[part[0]], 1)])
-			out.append("Residents move toward the most satisfying cities.")
+			out.append("Residents move toward the more satisfying cities.")
 			return out
 		"population":
 			var d: Array = sg.call(_per_minute(2), " / min")
-			var mig: Dictionary = Catalogue.data().get("migration", {})
-			var first := int(mig.get("first", 80))
-			var every := int(mig.get("interval", 20))
-			var t := tick()
-			var next := first - t if t < first else every - ((t - first) % every)
+			var next := _next_migration()
 			return ["Residents", ["Now", Catalogue.fmt(pop)], ["Change", d[0], d[1]], ["Homes", Catalogue.fmt(float(cap.get("housing", 0)))],
-				["Rank", "#%d of 4" % _rank()], ["Next move of residents", "%d s" % next]]
+				["Rank", "#%d of 4" % _rank()], ["Next move of residents", ("%d s" % next) if next >= 0 else "none left"]]
 		"homes":
 			return ["Homes", ["Housing capacity", Catalogue.fmt(float(cap.get("housing", 0)))], ["Residents", Catalogue.fmt(pop)],
-				["Full comfort at 115 %%", Catalogue.fmt(pop * 1.15)], "Build Residential Districts to house more people."]
+				["Full comfort at 115 %", Catalogue.fmt(pop * _slack("housing_slack"))], "No home, no newcomer: build Residential Districts to grow."]
 		"jobs":
-			return ["Jobs", ["Jobs offered", Catalogue.fmt(float(cap.get("potential_jobs", 0)))], ["Jobs filled", Catalogue.micro(cap.get("realized_jobs_micro", 0))],
-				["Staffing", "%s %%" % Catalogue.micro(int(cap.get("staffing_micro", 0)) * 100, 0)], ["Residents", Catalogue.fmt(pop)]]
+			var e: Dictionary = o.get("employment", {})
+			return ["Jobs", ["Residents at work", Catalogue.fmt(float(cap.get("employed", 0)))], ["In municipal jobs", Catalogue.fmt(float(e.get("municipal", 0)))],
+				["In your buildings", Catalogue.fmt(float(e.get("buildings", 0)))], ["Residents", Catalogue.fmt(pop)],
+				"Buildings need workers to run; the first residents work for the city."]
 		"power":
 			var rows: Array = ["Electricity"]
-			for f in [["supply", "Supply"], ["demand", "Demand"], ["delivered", "Delivered"], ["shortage", "Shortage"], ["imports", "Bought"], ["exports", "Sold"], ["municipal_delivered", "From the grid"], ["biogas_available", "From biogas"]]:
-				if e.has(f[0]):
-					rows.append([f[1], Catalogue.micro(e[f[0]], 1), bad if f[0] == "shortage" and int(e[f[0]]) > 0 else Color.WHITE])
+			for f in [["municipal_micro_E", "From the grid"], ["plants_micro_E", "From your plants"], ["biogas_micro_E", "From biogas"],
+					["imports_micro_E", "Bought"], ["exports_micro_E", "Sold"], ["unused_micro_E", "Unused"]]:
+				rows.append([f[1], Catalogue.micro(p.get(f[0], 0), 1)])
+			rows.append(["Requested", "%.1f" % _requested_power(p)])
+			rows.append(["Delivered", "%.1f" % _delivered_power(p), bad if _delivered_power(p) < _requested_power(p) else Color.WHITE])
+			rows.append(["Reliability", "%s %%" % Catalogue.micro(int(p.get("reliability_micro", 0)) * 100, 0)])
 			return rows
 		"services":
-			return ["Services", ["Service capacity", Catalogue.micro(cap.get("services_micro", 0))], ["Needed (115 %% of residents)", Catalogue.fmt(pop * 1.15)],
+			return ["Services", ["Service capacity", Catalogue.micro(cap.get("services_micro", 0))], ["Needed (115 % of residents)", Catalogue.fmt(pop * _slack("services_slack"))],
 				"Public Services Centers add capacity."]
 		"waste":
-			var u: Array = o.get("uncollected_micro", [])
-			var so: Array = o.get("sorted_micro", [])
-			var wt: Dictionary = o.get("waste_totals", {})
 			var rows2: Array = ["Waste"]
+			var street: Array = o.get("street_micro", [])
 			for i in 3:
-				rows2.append(["On the street · %s" % Catalogue.WASTE[i], Catalogue.micro(u[i] if i < u.size() else 0, 1)])
-			for i in 3:
-				rows2.append(["Sorted · %s" % Catalogue.WASTE[i], Catalogue.micro(so[i] if i < so.size() else 0, 1)])
-			rows2.append(["Collected so far", Catalogue.micro(wt.get("collected", 0))])
-			rows2.append(["Recycled so far", Catalogue.micro(wt.get("recycled", 0))])
-			rows2.append(["Organics treated", Catalogue.micro(wt.get("organic_processed", 0))])
-			rows2.append(["Sent to landfill", Catalogue.micro(o.get("disposed_micro", 0))])
+				rows2.append(["On the street · %s" % Catalogue.WASTE[i], Catalogue.micro(street[i] if i < street.size() else 0, 1)])
+			var sorted: Array = o.get("sorted_micro", [])
+			rows2.append(["Collected, awaiting sorting", Catalogue.micro(_sum(o.get("mixed_micro", [])), 1)])
+			rows2.append(["Sorted · recyclable", Catalogue.micro(sorted[0] if sorted.size() > 0 else 0, 1)])
+			rows2.append(["Sorted · organic", Catalogue.micro(sorted[1] if sorted.size() > 1 else 0, 1)])
+			rows2.append(["Waiting for the landfill", Catalogue.micro(o.get("disposal_micro", 0), 1)])
+			rows2.append(["Materials recovered so far", Catalogue.micro(_recovered(w), 1)])
+			rows2.append(["Landfilled so far", Catalogue.micro(w.get("landfilled", 0))])
 			return rows2
 		"air":
-			return ["Environment", ["Environment", Catalogue.micro(o.get("environment_micro", 0), 1)], ["Air", Catalogue.micro(o.get("air_micro", 0), 1)],
-				["Air with policy and events", Catalogue.micro(o.get("effective_air_micro", 0), 1)], ["Landfill damage", Catalogue.micro(o.get("landfill_damage_micro", 0), 1)]]
+			return ["Environment", ["Environment", Catalogue.micro(o.get("environment_micro", 0), 1)], ["Air pollution", "−" + Catalogue.micro(o.get("air_micro", 0), 1)],
+				["Landfill damage", "−" + Catalogue.micro(o.get("landfill_damage_micro", 0), 1)], ["Waste lying around", "−" + Catalogue.micro(o.get("pressure_micro", 0), 1)],
+				["Park amenity", "+" + Catalogue.micro(o.get("amenity_micro", 0), 1)], "Landfill damage never fades; parks clean only the air."]
 		"money":
 			var n: Array = sg.call(_per_minute(1), " / min")
-			return ["Cash", ["Available", Catalogue.micro(o.get("available_money_micro", 0))], ["Balance", Catalogue.micro(o.get("money_micro", 0))],
-				["Net over the last minute", n[0], n[1]], "Net change is measured between the updates the server sent."]
+			var rows4: Array = ["Cash", ["Available", Catalogue.micro(o.get("available_money_micro", 0))], ["Balance", Catalogue.micro(o.get("money_micro", 0))]]
+			var held := int(o.get("money_micro", 0)) - int(o.get("available_money_micro", 0))
+			if held > 0:
+				rows4.append(["Held in contract escrow", Catalogue.micro(held, 1)])
+			rows4.append(["Net over the last minute", n[0], n[1]])
+			var unpaid := int(o.get("finance", {}).get("unpaid_municipal_upkeep_micro", 0))
+			if unpaid > 0:
+				rows4.append(["City upkeep left unpaid", Catalogue.micro(unpaid, 1), bad])
+			return rows4
 		"materials":
 			var m: Array = sg.call(_per_minute(3), " / min")
-			return ["Materials", ["In stock", Catalogue.micro(o.get("materials_micro", 0))], ["Recovered so far", Catalogue.micro(o.get("recovered_micro", 0))],
-				["Spent so far", Catalogue.micro(o.get("materials_spent_micro", 0))], ["Change", m[0], m[1]]]
+			var ml: Dictionary = o.get("materials", {})
+			return ["Materials", ["In stock", "%s / %s" % [Catalogue.micro(o.get("materials_micro", 0)), Catalogue.fmt(float(Catalogue.data().get("materials", {}).get("capacity", 500)))]],
+				["Salvaged by collection", Catalogue.micro(w.get("salvaged", 0), 1)], ["Reused by sorting", Catalogue.micro(w.get("sorting_reuse", 0), 1)],
+				["Made by recycling", Catalogue.micro(w.get("recycled_materials", 0), 1)], ["Used from stock", Catalogue.micro(ml.get("used", 0), 1)],
+				["Bought", Catalogue.micro(ml.get("purchased", 0), 1)], ["Sold", Catalogue.micro(ml.get("sold", 0), 1)], ["Change", m[0], m[1]]]
 		"time":
-			var ev: Dictionary = v().get("public", {}).get("events", {})
+			var cr: Dictionary = v().get("public", {}).get("crisis", {})
 			var rows3: Array = ["Match clock", ["Elapsed", Catalogue.clock(tick())], ["Left", Catalogue.clock(int(v().get("public", {}).get("duration_ticks", 1200)) - tick())]]
-			for id in ev.get("active", []):
-				rows3.append(["Now", Catalogue.EVENTS.get(id, [id])[0], bad])
-			for id in ev.get("warnings", []):
-				rows3.append(["Coming", Catalogue.EVENTS.get(id, [id])[0], Color("#ffd257")])
-			for x in Catalogue.data().get("events", []):
-				if int(x["start"]) > tick():
-					rows3.append(["Next crisis", "%s at %s" % [Catalogue.EVENTS.get(x["id"], [x["id"]])[0], Catalogue.clock(int(x["start"]))]])
+			for id in cr.get("active", []):
+				rows3.append(["Now", Catalogue.event_name(id), bad])
+			for id in cr.get("announced", []):
+				rows3.append(["Coming", Catalogue.event_name(id), Color("#ffd257")])
+			for x in Catalogue.data().get("crises", []):
+				if int(x["start_tick"]) > tick():
+					rows3.append(["Next crisis", "%s at %s" % [Catalogue.event_name(x["id"]), Catalogue.clock(int(x["start_tick"]))]])
 					break
 			return rows3
 	return [key]
+
+
+static func _recovered(w: Dictionary) -> int:
+	return int(w.get("salvaged", 0)) + int(w.get("sorting_reuse", 0)) + int(w.get("recycled_materials", 0))
 
 
 ## Building notifications, from the same per-building problems the bubbles
@@ -804,26 +885,23 @@ func _flash(target: String) -> void:
 func _building_needs() -> Dictionary:
 	var o := own()
 	var out := {}
-	var staffing := int(o.get("capacity", {}).get("staffing_micro", 1000000))
-	var street := 0
-	for x in o.get("uncollected_micro", []):
-		street += int(x)
+	var street := _sum(o.get("street_micro", []))
 	for b in o.get("buildings", []):
 		if b.get("status", "") != "complete" or tick() == 0:
 			continue
 		var t := int(b["tile"])
 		var type := str(b["type"])
+		var op: Dictionary = b.get("op", {})
 		var need := ""
-		var pf: Variant = b.get("power_factor_micro")
 		if not map.layout or not map.layout.linked(t):
 			need = "road"
 		elif not b.get("enabled", true):
 			need = "off"
-		elif not b.get("funded", true):
+		elif not op.get("funded", false):
 			need = "coin"
-		elif pf != null and int(pf) < 1000000:
+		elif int(op.get("requested_micro_E", 0)) > 0 and int(op.get("power_micro", 0)) < 1000000:
 			need = "power"
-		elif staffing < 1000000 and int(Catalogue.spec(type).get("l1", {}).get("jobs", 0)) > 0:
+		elif Catalogue.figure(type, str(b.get("size", "S")), "job_slots") > 0 and int(op.get("staff_micro", 0)) < 1000000:
 			need = "people"
 		elif type == "residential_district" and street > 0:
 			need = "waste"
@@ -833,20 +911,17 @@ func _building_needs() -> Dictionary:
 
 
 func _banner_refresh() -> void:
-	var ev: Dictionary = v().get("public", {}).get("events", {})
-	var active: Array = ev.get("active", [])
-	var warn: Array = ev.get("warnings", [])
+	var cr: Dictionary = v().get("public", {}).get("crisis", {})
+	var active: Array = cr.get("active", [])
+	var coming: Array = cr.get("announced", [])
 	var text := ""
 	var col := Color("#17323a")
 	if not active.is_empty():
 		text = "⚠ %s — %s" % [Catalogue.event_name(active[0]), Catalogue.EVENTS.get(active[0], ["", ""])[1]]
 		col = Color("#b9422f")
-	elif not warn.is_empty():
-		var start := 0
-		for e in Catalogue.data().get("events", []):
-			if e["id"] == warn[0]:
-				start = int(e["start"])
-		text = "%s in %s" % [Catalogue.event_name(warn[0]), Catalogue.clock(start - tick())]
+	elif not coming.is_empty():
+		var start := int(Catalogue.crisis(coming[0]).get("start_tick", tick()))
+		text = "%s in %s" % [Catalogue.event_name(coming[0]), Catalogue.clock(start - tick())]
 		col = Color("#c27a10")
 	_banner.visible = text != ""
 	if text != "":
@@ -862,8 +937,8 @@ func _panel_refresh() -> void:
 			_market_panel()
 		"rivals":
 			_rivals_panel()
-		"policy":
-			_policy_panel()
+		"waste":
+			_waste_panel()
 		"building":
 			var b := _building_at(selected)
 			if b.is_empty():
@@ -883,39 +958,58 @@ func _section(text: String) -> void:
 	_body.add_child(UI.label(text, "Caption"))
 
 
-## One building: what it does, what it needs, and what you can do with it.
+## One building: what it does at its size, how it is running, and what you can do with it.
 func _building_panel(b: Dictionary) -> void:
 	var t := str(b["type"])
-	var level := int(b.get("level", 1))
+	var size := str(b.get("size", "S"))
 	var id := int(b["id"])
-	_panel_title.text = "%s · Lv %d" % [Catalogue.building_name(t), level]
+	var op: Dictionary = b.get("op", {})
+	_panel_title.text = "%s · %s" % [Catalogue.building_name(t), Catalogue.size_name(size)]
 	var p: Variant = _project_for(id)
 	var lines := [Catalogue.role(t)]
 	var need: String = map.needs.get(int(b["tile"]), "")
 	if p != null:
-		lines.append("🏗 %s in %s" % ["Upgrading" if str(p.get("kind", "")) == "upgrade" else "Being built", Catalogue.clock(int(p["complete_tick"]) - tick())])
-	elif need != "":
-		lines.append("[color=#b9422f]⚠ %s[/color]" % BUBBLES.get(need, need))
-	else:
-		lines.append("[color=#1f8a5b]✓ Working[/color]")
+		lines.append("🏗 %s in %s" % ["Upgrading to %s" % Catalogue.size_name(str(p.get("target_size", ""))) if str(p.get("kind", "")) == "upgrade" else "Being built", Catalogue.clock(int(p["complete_tick"]) - tick())])
+	if b.get("status", "") == "complete":
+		if need != "":
+			lines.append("[color=#b9422f]⚠ %s[/color]" % BUBBLES.get(need, need))
+		elif p == null:
+			lines.append("[color=#1f8a5b]✓ Working[/color]")
 	_card(UI.rich("\n".join(lines)))
-	var s := Catalogue.spec(t)
+	var facts := UI.vbox(2)
+	for f in _tier_facts(t, size):
+		facts.add_child(UI.label(f, "Small", true))
+	if b.get("status", "") == "complete" and op.get("funded", false):
+		var jobs := int(Catalogue.figure(t, size, "job_slots"))
+		var run := "Running at %s %%" % Catalogue.micro(int(op.get("fraction_micro", 0)) * 100, 0)
+		if jobs > 0:
+			run += " · workers %d / %d" % [int(op.get("workers", 0)), jobs]
+		if int(op.get("requested_micro_E", 0)) > 0:
+			run += " · power %s %%" % Catalogue.micro(int(op.get("power_micro", 0)) * 100, 0)
+		facts.add_child(UI.label(run, "Small", true))
+	_card(facts)
+	# Buttons keep short labels (a button never wraps); what they cost or return
+	# is in a caption above them.
 	var acts := UI.vbox(6)
+	var note := func(text: String) -> void: acts.add_child(UI.label(text, "Caption", true))
 	if p != null:
+		note.call("Cancelling returns 80 % of the cash and every material unit.")
 		acts.add_child(_danger("cancel", "Cancel", "cancel_project", {"building_id": id}, "Cancel %s" % Catalogue.building_name(t)))
 	elif b.get("status", "") == "complete":
-		if level == 1:
-			var up: Dictionary = s.get("upgrade", {})
-			var locked := int(own().get("development_micro", 0)) < int(s.get("upgrade_unlock_micro", 0))
-			var lbl := "Upgrade · 💰 %s · ⏱ %s" % [Catalogue.micro(up.get("cost_micro", 0)), Catalogue.clock(int(up.get("duration_seconds", 0)))]
-			if locked:
-				lbl = "Upgrade 🔒 Dev %s" % Catalogue.micro(s.get("upgrade_unlock_micro", 0))
-			var ub := UI.button(lbl, "PrimaryButton", "", func(): session.act("upgrade", {"building_id": id}, "Upgrade %s" % Catalogue.building_name(t)))
-			ub.disabled = locked or session.pending_for("upgrade", "building_id", id)
+		if Catalogue.NEXT_SIZE.has(size):
+			var next: String = Catalogue.NEXT_SIZE[size]
+			var up := Catalogue.upgrade_to(t, next)
+			var busy := _slots_free() == 0
+			note.call("Both construction slots are busy." if busy else "Upgrade to %s: %s. It keeps working meanwhile." % [Catalogue.size_name(next),
+				Catalogue.price_text(float(up.get("additional_credits", 0)), float(up.get("additional_materials", 0)), int(up.get("seconds", 0)))])
+			var ub := UI.button("Upgrade to %s" % Catalogue.size_name(next), "PrimaryButton", "", func(): session.act("upgrade", {"building_id": id}, "Upgrade %s to %s" % [Catalogue.building_name(t), Catalogue.size_name(next)]))
+			ub.disabled = busy or session.pending_for("upgrade", "building_id", id)
 			acts.add_child(ub)
 		if b.get("enabled", true):
+			note.call("Switched off, it stops working and pays 20 % standby upkeep. Demolishing returns 10 % of its price.")
 			acts.add_child(UI.button("Switch off", "SoftButton", "", func(): session.act("disable", {"building_id": id}, "Switch off %s" % Catalogue.building_name(t))))
 		else:
+			note.call("Demolishing returns 10 % of its price.")
 			var on := UI.button("Switch on", "PrimaryButton", "", func(): map.layout.road_off.erase(id); session.act("enable", {"building_id": id}, "Switch on %s" % Catalogue.building_name(t)))
 			if not map.layout.linked(int(b["tile"])):
 				on.text = "Draw a road to it first"
@@ -925,27 +1019,102 @@ func _building_panel(b: Dictionary) -> void:
 	_card(acts)
 
 
-func _policy_panel() -> void:
-	_panel_title.text = "Reduce Waste"
+## What a tier does, as short lines, from the exported figures.
+static func _tier_facts(t: String, size: String) -> Array:
+	var f := func(key: String) -> float: return Catalogue.figure(t, size, key)
+	var out: Array = []
+	var pct := func(x: float) -> String: return "%d %%" % int(round(x * 100.0))
+	if f.call("housing_capacity") > 0:
+		out.append("Homes for %s residents" % Catalogue.fmt(f.call("housing_capacity")))
+	if f.call("service_capacity") > 0:
+		out.append("Services for %s residents" % Catalogue.fmt(f.call("service_capacity")))
+	if f.call("gross_income_credits_per_min") > 0:
+		out.append("Income up to %s / min" % Catalogue.fmt(f.call("gross_income_credits_per_min")))
+	if f.call("factory_materials_consumed_per_min") > 0:
+		out.append("Uses %s materials / min (stock first, then bought at %s)" % [Catalogue.fmt(f.call("factory_materials_consumed_per_min")), Catalogue.fmt(float(Catalogue.data().get("materials", {}).get("buy_price", 6)))])
+	if f.call("waste_generated_per_min") > 0:
+		out.append("Makes %s waste / min" % Catalogue.fmt(f.call("waste_generated_per_min")))
+	if f.call("collection_waste_per_min") > 0:
+		out.append("Collects %s waste / min and salvages %s of its recyclables" % [Catalogue.fmt(f.call("collection_waste_per_min")), pct.call(f.call("collection_direct_reuse_fraction"))])
+	if f.call("sorting_waste_per_min") > 0:
+		out.append("Sorts %s collected waste / min: catches %s of recyclables and %s of organics, reuses %s of the recyclables caught" % [Catalogue.fmt(f.call("sorting_waste_per_min")),
+			pct.call(f.call("sort_capture_recyclable")), pct.call(f.call("sort_capture_organic")), pct.call(f.call("sorting_direct_reuse_fraction"))])
+	if f.call("recycling_waste_per_min") > 0:
+		out.append("Recycles %s sorted recyclables / min into %s materials" % [Catalogue.fmt(f.call("recycling_waste_per_min")), pct.call(f.call("material_yield_fraction"))])
+	if f.call("biogas_organic_waste_per_min") > 0:
+		out.append("Digests %s sorted organics / min for %s E each, next second" % [Catalogue.fmt(f.call("biogas_organic_waste_per_min")), String.num(f.call("biogas_energy_capacity_per_organic_unit_per_min"), 1)])
+	if f.call("landfill_waste_per_min") > 0:
+		out.append("Landfills %s waste / min, at %s each" % [Catalogue.fmt(f.call("landfill_waste_per_min")), String.num(float(Catalogue.data().get("landfill_fee", 0.85)), 2)])
+	if f.call("power_generated_capacity") > 0:
+		out.append("Generates %s E" % Catalogue.fmt(f.call("power_generated_capacity")))
+	if f.call("air_emissions_points_per_min") > 0:
+		out.append("Smoke: %s air points / min" % String.num(f.call("air_emissions_points_per_min"), 2))
+	if f.call("air_cleanup_points_per_min") > 0:
+		out.append("Cleans %s air points / min, +%s amenity" % [String.num(f.call("air_cleanup_points_per_min"), 2), String.num(f.call("park_amenity_points"), 1)])
+	var needs := []
+	if f.call("job_slots") > 0:
+		needs.append("%s workers" % Catalogue.fmt(f.call("job_slots")))
+	if f.call("power_demand_capacity") > 0:
+		needs.append("%s E" % Catalogue.fmt(f.call("power_demand_capacity")))
+	needs.append("%s / min upkeep" % Catalogue.fmt(f.call("maintenance_credits_per_min")))
+	out.append("Needs " + ", ".join(needs))
+	return out
+
+
+## The circular economy at a glance: which stages are built, the waste waiting
+## at each, the materials recovered, and a way to sell materials.
+func _waste_panel() -> void:
+	_panel_title.text = "Waste & materials"
 	var o := own()
-	var on := bool(o.get("reduce_waste", false))
-	var pdata: Dictionary = Catalogue.data().get("policy", {})
-	var box := UI.vbox(8)
-	box.add_child(UI.label("ON" if on else "OFF", "Display"))
-	box.add_child(UI.label("Homes make 25 %% less waste and businesses 10 %% less. Costs %s a minute and a little business income." % Catalogue.micro(pdata.get("policy_fee_micro_per_minute", 0)), "Caption", true))
-	var cool := int(o.get("policy_change_at", 0)) - tick()
-	var pb := UI.button("Turn %s" % ("off" if on else "on"), "PrimaryButton", "", func(): session.act("set_reduce_waste", {"enabled": not on}, "Reduce Waste %s" % ("off" if on else "on")))
-	if cool > 0:
-		pb.text = "Can change in %s" % Catalogue.clock(cool)
-		pb.disabled = true
-	box.add_child(pb)
-	_card(box)
+	var w: Dictionary = o.get("waste", {}).get("totals", {})
+	var counts := {}
+	for b in o.get("buildings", []):
+		if b.get("status", "") == "complete":
+			counts[str(b["type"])] = int(counts.get(str(b["type"]), 0)) + 1
+	var chain := UI.vbox(4)
+	chain.add_child(UI.label("Your recovery chain", "Value"))
+	for t in ["collection_center", "sorting_center", "recycling_center", "biogas_facility", "landfill"]:
+		var n := int(counts.get(t, 0))
+		var req: Array = Catalogue.requires(t)
+		var line := "✓ %s × %d" % [Catalogue.building_name(t), n] if n > 0 else "· %s — not built" % Catalogue.building_name(t)
+		if n == 0 and not req.is_empty():
+			line += " (needs %s)" % " and ".join(req.map(func(r): return Catalogue.building_name(r)))
+		chain.add_child(UI.label(line, "Small", true))
+	chain.add_child(UI.label("Each stage recovers more from the same waste: collection salvages a little, sorting reuses more, recycling the most. The city fleet only hauls to the landfill.", "Caption", true))
+	_card(chain)
+	var now := UI.vbox(2)
+	now.add_child(UI.label("Waste now", "Value"))
+	var sorted: Array = o.get("sorted_micro", [])
+	for row in [["On the street", _sum(o.get("street_micro", []))], ["Collected, awaiting sorting", _sum(o.get("mixed_micro", []))],
+			["Sorted recyclables", float(sorted[0]) if sorted.size() > 0 else 0.0], ["Sorted organics", float(sorted[1]) if sorted.size() > 1 else 0.0],
+			["Waiting for the landfill", float(o.get("disposal_micro", 0))]]:
+		now.add_child(UI.hbox(8, [UI.label(row[0], "Small"), UI.spacer(), UI.label(Catalogue.micro(row[1], 1), "Small")]))
+	_card(now)
+	var mats := UI.vbox(4)
+	var mdata: Dictionary = Catalogue.data().get("materials", {})
+	mats.add_child(UI.label("Materials: %s in stock" % Catalogue.micro(o.get("materials_micro", 0)), "Value"))
+	mats.add_child(UI.label("Recovered so far: %s (collection %s, sorting %s, recycling %s)" % [Catalogue.micro(_recovered(w), 1), Catalogue.micro(w.get("salvaged", 0), 1),
+		Catalogue.micro(w.get("sorting_reuse", 0), 1), Catalogue.micro(w.get("recycled_materials", 0), 1)], "Small", true))
+	mats.add_child(UI.label("Construction and factories use stock first; anything missing is bought at %s each. Stock above %s sells by itself at %s." % [
+		Catalogue.fmt(float(mdata.get("buy_price", 6))), Catalogue.fmt(float(mdata.get("capacity", 500))), Catalogue.fmt(float(mdata.get("sell_price", 2)))], "Caption", true))
+	var amount := SpinBox.new()
+	amount.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	amount.min_value = 1
+	amount.max_value = maxf(1.0, floorf(float(o.get("materials_micro", 0)) / Catalogue.MICRO))
+	amount.value = minf(float(sell_amount), amount.max_value)
+	amount.suffix = "units"
+	amount.value_changed.connect(func(x): sell_amount = int(x))
+	var sell := UI.button("Sell at %s each" % Catalogue.fmt(float(mdata.get("sell_price", 2))), "SoftButton", "", func():
+		session.act("sell_materials", {"amount": int(amount.value) * int(Catalogue.MICRO)}, "Sell %d materials" % int(amount.value)))
+	sell.disabled = int(o.get("materials_micro", 0)) < int(Catalogue.MICRO)
+	mats.add_child(UI.hbox(8, [amount, sell]))
+	_card(mats)
 
 
 func start_placing(type: String, at_cell: Variant = null) -> void:
 	road_mode("")
 	var cell: Vector2i = at_cell if at_cell != null else map.center_cell()
-	placing = {"type": type, "at": cell, "ok": false, "why": ""}
+	placing = {"type": type, "size": build_size, "at": cell, "ok": false, "why": ""}
 	selected = -1
 	tab = ""
 	_snap(cell)
@@ -991,13 +1160,14 @@ func _confirm_place() -> void:
 	if placing.is_empty() or not placing.get("ok", false):
 		return
 	var type: String = placing["type"]
+	var size: String = placing["size"]
 	var tl := _free_tile()
 	map.layout.place(tl, placing["at"])
 	map.save()
 	# Reserve before sending: the send triggers a refresh that would otherwise
 	# drop a spot with no building behind it yet.
 	_reserved[tl] = ""
-	var aid := session.act("construct", {"building_type": type, "tile": tl}, "Build %s" % Catalogue.building_name(type))
+	var aid := session.act("construct", {"building_type": type, "size": size, "tile": tl}, "Build %s %s" % [Catalogue.size_name(size), Catalogue.building_name(type)])
 	if aid != "":
 		_reserved[tl] = aid
 	else:
@@ -1135,9 +1305,11 @@ func _modebar_refresh() -> void:
 	if placing.is_empty():
 		return
 	var type: String = placing["type"]
+	var size: String = placing["size"]
 	var box := UI.vbox(6)
-	var s := Catalogue.spec(type)
-	box.add_child(UI.label("%s · 💰 %s · ⏱ %s" % [Catalogue.building_name(type), Catalogue.micro(s.get("l1", {}).get("cost_micro", 0)), Catalogue.clock(int(s.get("l1", {}).get("duration_seconds", 0)))], "Value"))
+	var tier := Catalogue.tier(type, size)
+	box.add_child(UI.label("%s %s · %s" % [Catalogue.size_name(size), Catalogue.building_name(type), Catalogue.price_text(float(tier.get("construction_credits", 0)),
+		float(tier.get("construction_materials", 0)), int(tier.get("construction_seconds", 0)))], "Value", true))
 	var msg := "Drag it anywhere on open land, then lift your finger to build. Put it beside a road so it works."
 	if not placing.get("ok", false):
 		msg = "Can't build here: %s." % placing.get("why", "")
@@ -1169,76 +1341,62 @@ func _market_panel() -> void:
 	_panel_title.text = "Trade"
 	var m: Dictionary = v().get("marketplace", {})
 	var me := session.seat
-	var prices: Dictionary = Catalogue.data().get("market", {}).get("prices", {})
-	# Form: what and how much. Rates are per minute for waste, in E for power.
+	var mk: Dictionary = Catalogue.data().get("market", {})
+	var prices: Dictionary = mk.get("prices", {})
+	# Offer: the service and how much. Power is in E, treatment in units per minute.
 	var form := UI.vbox(6)
-	form.add_child(UI.label("Ask rivals for a service, or offer yours", "Value"))
+	form.add_child(UI.label("Offer spare capacity to rivals", "Value"))
 	var svc := OptionButton.new()
 	for k in Catalogue.SERVICES:
 		svc.add_item(Catalogue.SERVICES[k])
 	svc.select(Catalogue.SERVICES.keys().find(market_form["type"]))
-	svc.item_selected.connect(func(i): market_form["type"] = Catalogue.SERVICES.keys()[i]; market_form["price"] = 0; refresh("all"))
+	svc.item_selected.connect(func(i): market_form["type"] = Catalogue.SERVICES.keys()[i]; refresh("all"))
 	form.add_child(svc)
-	var band: Dictionary = prices.get(market_form["type"], {})
-	if int(market_form["price"]) == 0:
-		market_form["price"] = int(band.get("standard", 0))
+	var power: bool = market_form["type"] == "electricity"
 	var rate := SpinBox.new()
 	rate.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rate.min_value = 1
-	rate.max_value = 500
-	rate.value = int(market_form["rate"])
-	rate.suffix = "E" if market_form["type"] == "electricity" else "units/min"
+	rate.max_value = float(mk.get("electricity_max", 40)) if power else 500.0
+	rate.value = clampf(float(market_form["rate"]), rate.min_value, rate.max_value)
+	market_form["rate"] = int(rate.value)
+	rate.suffix = "E" if power else "units/min"
 	rate.value_changed.connect(func(x): market_form["rate"] = int(x))
-	var price := SpinBox.new()
-	price.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	price.min_value = float(band.get("minimum", 0)) / Catalogue.MICRO
-	price.max_value = float(band.get("maximum", 0)) / Catalogue.MICRO
-	price.step = float(band.get("step", 100000)) / Catalogue.MICRO
-	price.value = float(market_form["price"]) / Catalogue.MICRO
-	price.suffix = "/ E·min" if market_form["type"] == "electricity" else "/ unit"
-	price.value_changed.connect(func(x): market_form["price"] = int(round(x * Catalogue.MICRO)))
 	form.add_child(UI.hbox(8, [UI.label("Amount", "Caption"), rate]))
-	form.add_child(UI.hbox(8, [UI.label("Price", "Caption"), price]))
-	var micro_rate := func() -> int: return int(market_form["rate"]) * int(Catalogue.MICRO)
-	form.add_child(UI.hbox(8, [
-		UI.button("Request quotes", "PrimaryButton", "", func(): session.act("request_quotes", {"type": market_form["type"], "rate": micro_rate.call()}, "Request %s" % Catalogue.SERVICES[market_form["type"]])),
-		UI.button("Publish offer", "SoftButton", "", func(): session.act("publish_offer", {"type": market_form["type"], "rate": micro_rate.call(), "price": int(market_form["price"])}, "Offer %s" % Catalogue.SERVICES[market_form["type"]]))]))
+	form.add_child(UI.label("Fixed price: %s %s. You can only offer capacity your city had spare in the last second." % [
+		String.num(float(prices.get(market_form["type"], 0)), 2), "per E·min" if power else "per unit treated"], "Caption", true))
+	form.add_child(UI.button("Publish offer", "PrimaryButton", "", func():
+		session.act("publish_offer", {"type": market_form["type"], "rate": int(market_form["rate"]) * int(Catalogue.MICRO)}, "Offer %s" % Catalogue.SERVICES[market_form["type"]])))
 	_card(form)
 
-	_section("Open requests")
-	var any := false
-	for r in m.get("requests", []):
-		any = true
-		var mine: bool = int(r["buyer"]) == me
-		var box := UI.vbox(4)
-		var window := int(r["quote_until"]) - tick()
-		box.add_child(UI.label("%s wants %s %s — %s" % ["You" if mine else "City %d" % (int(r["buyer"]) + 1), Catalogue.micro(r["rate"]), Catalogue.SERVICES.get(r["type"], r["type"]),
-			("quotes close in %ds" % window) if window > 0 else "choosing a quote (%ds)" % (int(r["select_until"]) - tick())], "", true))
-		if not mine and window > 0:
-			var rid := int(r["id"])
-			var rtype: String = r["type"]
-			var rrate := int(r["rate"])
-			box.add_child(UI.button("Quote %s at my price" % Catalogue.micro(rrate), "PrimaryButton", "", func():
-				var p := int(market_form["price"]) if market_form["type"] == rtype else int(prices.get(rtype, {}).get("standard", 0))
-				session.act("submit_quote", {"type": rtype, "rate": rrate, "price": p, "request_id": rid}, "Quote to City %d" % (int(r["buyer"]) + 1))))
-		_card(box)
-	if not any:
-		_card(UI.label("No open requests.", "Caption"))
-
 	_section("Open offers")
-	any = false
+	var length := SpinBox.new()
+	length.min_value = float(mk.get("min_duration", 60))
+	length.max_value = float(mk.get("max_duration", 300))
+	length.step = 30
+	length.value = float(market_form["duration"])
+	length.suffix = "s"
+	length.value_changed.connect(func(x): market_form["duration"] = int(x))
+	_card(UI.vbox(4, [UI.hbox(8, [UI.label("Contract length", "Caption"), length]),
+		UI.label("Your escrow holds the most a contract could cost; you pay only for what is delivered, and the rest comes back.", "Caption", true)]))
+	var any := false
 	for o in m.get("offers", []):
 		any = true
 		var seller := int(o["seller"])
 		var oid := int(o["id"])
+		var otype := str(o["type"])
+		var orate := int(o["rate_micro"])
+		var oprice := int(o["price_micro"])
 		var box := UI.vbox(4)
-		var is_quote := int(o.get("request_id", -1)) >= 0
-		box.add_child(UI.label("%s sells %s %s at %s%s" % ["You" if seller == me else "City %d" % (seller + 1), Catalogue.micro(o["rate"]), Catalogue.SERVICES.get(o["type"], o["type"]),
-			Catalogue.micro(o["price"], 2), " (quote on request #%d)" % int(o["request_id"]) if is_quote else ""], "", true))
+		box.add_child(UI.label("%s %s %s at %s" % ["You sell" if seller == me else "City %d sells" % (seller + 1), Catalogue.micro(orate), _unit(otype) + " of " + Catalogue.SERVICES.get(otype, otype).to_lower(),
+			Catalogue.micro(oprice, 2)], "", true))
 		if seller == me:
 			box.add_child(UI.button("Withdraw", "SoftButton", "close", func(): session.act("withdraw_offer", {"id": oid}, "Withdraw offer")))
 		else:
-			box.add_child(UI.button("Accept", "PrimaryButton", "check", func(): session.act("accept_quote", {"id": oid}, "Accept offer from City %d" % (seller + 1))))
+			var dur := int(market_form["duration"])
+			var hold := float(orate) * float(dur) / 60.0 * float(oprice) / (Catalogue.MICRO * Catalogue.MICRO)
+			box.add_child(UI.label("For %s your escrow holds up to %s." % [Catalogue.clock(dur), String.num(hold, 2)], "Caption", true))
+			box.add_child(UI.button("Accept", "PrimaryButton", "check", func():
+				session.act("accept_offer", {"id": oid, "duration": int(market_form["duration"])}, "Accept offer from City %d" % (seller + 1))))
 		_card(box)
 	if not any:
 		_card(UI.label("No open offers.", "Caption"))
@@ -1250,15 +1408,21 @@ func _market_panel() -> void:
 			continue
 		any = true
 		var cid := int(k["id"])
+		var ktype := str(k["type"])
 		var sell: bool = int(k["seller"]) == me
+		var delivered := float(k.get("delivered_micro", 0)) / (60.0 if ktype == "electricity" else 1.0)
 		var box := UI.vbox(4)
-		box.add_child(UI.label("%s %s %s %s — delivered %s, paid %s, ends in %s" % ["You sell to" if sell else "You buy from", "City %d" % (int(k["buyer"] if sell else k["seller"]) + 1),
-			Catalogue.micro(k["rate"]), Catalogue.SERVICES.get(k["type"], k["type"]), Catalogue.micro(k.get("delivered", 0), 1), Catalogue.micro(k.get("paid", 0), 1), Catalogue.clock(int(k["end_tick"]) - tick())], "", true))
-		box.add_child(UI.hbox(6, [UI.button("Renew", "SoftButton", "", func(): session.act("renew_contract", {"id": cid}, "Renew contract")),
-			_danger("cc", "Cancel", "cancel_contract", {"id": cid}, "Cancel contract")]))
+		box.add_child(UI.label("%s %s: %s %s — delivered %s %s, paid %s, ends in %s" % ["You sell to" if sell else "You buy from", "City %d" % (int(k["buyer"] if sell else k["seller"]) + 1),
+			Catalogue.micro(k["rate_micro"]), _unit(ktype) + " of " + Catalogue.SERVICES.get(ktype, ktype).to_lower(), Catalogue.micro(delivered, 1),
+			"E·min" if ktype == "electricity" else "units", Catalogue.micro(k.get("paid_micro", 0), 2), Catalogue.clock(int(k["end_tick"]) - tick())], "", true))
+		box.add_child(_danger("cc%d" % cid, "Cancel", "cancel_contract", {"id": cid}, "Cancel contract"))
 		_card(box)
 	if not any:
 		_card(UI.label("None.", "Caption"))
+
+
+static func _unit(service: String) -> String:
+	return "E" if service == "electricity" else "units/min"
 
 
 func _rivals_panel() -> void:
@@ -1278,21 +1442,20 @@ func _rivals_panel() -> void:
 			f = Catalogue.FOUNDATIONS.get(str(own().get("foundation", "")), [""])[0]
 		box.add_child(UI.hbox(8, [UI.label("#%d %s" % [int(r["rank"]), "Your city" if cid == session.seat else "City %d" % (cid + 1)], "Value"), UI.spacer(), UI.label("%s residents" % Catalogue.fmt(r["population"]), "Value")]))
 		box.add_child(UI.bar(float(r["population"]) / maxf(total, 1) * 2.0, UI.PEOPLE if cid != session.seat else UI.PRIMARY))
-		box.add_child(UI.label("%s · Satisfaction %s · Environment %s · Development %s" % [f, Catalogue.micro(r.get("satisfaction_micro", 0), 1), Catalogue.micro(r.get("environment_micro", 0), 1), Catalogue.micro(r.get("development_micro", 0))], "Small", true))
+		var sat: String = Catalogue.micro(r["satisfaction_micro"], 1) if r.get("satisfaction_micro") != null else "–"
+		box.add_child(UI.label("%s · Satisfaction %s · Environment %s" % [f, sat, Catalogue.micro(r.get("environment_micro", 0), 1)], "Small", true))
 		if cid != session.seat:
 			var c2 := cid
 			var vb := UI.button("Return to My City" if visiting == cid else "Visit city", "SoftButton" if visiting == cid else "", "region", func(): visit(-1 if visiting == c2 else c2))
 			box.add_child(vb)
 		_card(box)
-	var mig: Dictionary = Catalogue.data().get("migration", {})
-	var first := int(mig.get("first", 80))
-	var every := int(mig.get("interval", 20))
-	var next := first if tick() < first else first + ((tick() - first) / every + 1) * every
-	_card(UI.label("Residents move toward the most satisfying city every %d s. Next move in %s." % [every, Catalogue.clock(next - tick())], "Caption", true))
+	var next := _next_migration()
+	var every := int(Catalogue.data().get("migration", {}).get("interval", 20))
+	_card(UI.label(("Residents move toward more satisfying cities every %d s, as far as there are homes for them. Next move in %s." % [every, Catalogue.clock(next)]) if next >= 0 else "No more moves of residents: the ranking is set by who holds them now.", "Caption", true))
 
 
 ## Looks at a rival's city, read-only, from the public part of the view:
-## its buildings, their level and whether they are finished. Its roads are
+## its buildings, their size and whether they are finished. Its roads are
 ## not shared, so the buildings are arranged along the main road. visit(-1)
 ## returns home.
 func visit(city_id: int) -> void:
@@ -1341,8 +1504,8 @@ func _visit_refresh() -> void:
 	_visit_label.text = "Visiting City %d · %s · %s residents · view only" % [visiting + 1, f, Catalogue.fmt(float(o.get("population", 0)))]
 	var bs := []
 	for b in o.get("buildings", []):
-		bs.append({"id": 100000 + int(b["tile"]), "tile": int(b["tile"]), "type": str(b["type"]), "level": int(b.get("level", 1)),
-			"status": str(b.get("status", "complete")), "operational": true, "visitor": true})
+		bs.append({"id": 100000 + int(b["tile"]), "tile": int(b["tile"]), "type": str(b["type"]), "size": str(b.get("size", "S")),
+			"status": str(b.get("status", "complete")), "op": {"fraction_micro": 1000000}, "visitor": true})
 	var city := {"buildings": bs, "population": o.get("population", 0), "projects": []}
 	map.show_city(city, tick(), "visit:%s:%d" % [str(v().get("match_id", "")), visiting])
 

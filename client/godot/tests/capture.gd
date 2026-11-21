@@ -98,10 +98,10 @@ func _process(delta: float) -> bool:
 		5:
 			if t > 0.6:
 				shot("5_build_list")
-				# Drag a Recovery Hub beside the main road, houses further out.
+				# Drag a Collection Center beside the main road, houses further out.
 				var L: CityLayout = app.map.layout
 				var near := L.spot_beside_main()
-				app.play.start_placing("recovery_hub")
+				app.play.start_placing("collection_center")
 				app.play._on_ghost_drag(near + Vector2i(1, 1))
 				set_meta("near", near)
 				go()
@@ -123,25 +123,52 @@ func _process(delta: float) -> bool:
 				shot("5c_roads_mode")
 				app.play.road_mode("")
 				for tl in app.map.layout.placements:
-					if not app.map.building_on(tl).is_empty() and app.map.building_on(tl)["type"] == "recovery_hub":
+					if not app.map.building_on(tl).is_empty() and app.map.building_on(tl)["type"] == "collection_center":
 						app.play._on_tile(tl)
 				step = 7
 				t = 0.0
 		7:
 			if t > 0.6:
 				shot("6_building_panel")
-				app.play._open("policy")
+				app.play._open("waste")
 				go()
 		8:
 			if t > 0.6:
-				shot("7_policy")
+				shot("7_waste")
+				s.act("publish_offer", {"type": "electricity", "rate": 5000000}, "Offer Electricity")
 				app.play._open("market")
 				go()
 		9:
-			if t > 0.6:
+			if t > 1.6:
 				shot("8_trade")
+				# TEST FIXTURE ONLY: a rival's offer and an active contract, to show
+				# how the Trade panel lists them; the next server view replaces them.
+				var rival := int(s.view["opponents"][0]["city_id"])
+				var tk := int(s.view["tick"])
+				s.view["marketplace"]["offers"].append({"id": 900, "seller": rival, "type": "recyclable", "rate_micro": 5000000, "price_micro": 750000, "created_tick": tk})
+				s.view["own_city"]["contracts"].append({"id": 901, "buyer": s.seat, "seller": rival, "type": "electricity", "rate_micro": 10000000,
+					"price_micro": 220000, "start_tick": tk - 30, "end_tick": tk + 90, "status": "active", "escrow_micro": 4400000,
+					"delivered_micro": 300000000, "paid_micro": 1100000, "last_delivery_micro": 10000000, "closed_tick": -1})
+				app.play.refresh("all")
+				step = 400
+				t = 0.0
+		400:
+			if t > 0.2:
+				(app.play._body.get_parent() as ScrollContainer).scroll_vertical = 330
+				step = 401
+				t = 0.0
+		401:
+			if t > 0.15:
+				shot("8b_trade_fixture")
+				(app.play._body.get_parent() as ScrollContainer).scroll_vertical = 2000
+				step = 402
+				t = 0.0
+		402:
+			if t > 0.15:
+				shot("8c_trade_fixture_contracts")
 				app.play._open("rivals")
-				go()
+				step = 10
+				t = 0.0
 		10:
 			if t > 0.6:
 				shot("9_rivals")

@@ -70,14 +70,14 @@ func play_state(name: String) -> void:
 ## then a strained one (environment or satisfaction middling), else calm.
 static func state_for(view: Dictionary) -> String:
 	var own: Dictionary = view.get("own_city", {})
-	var ev: Dictionary = view.get("public", {}).get("events", {})
+	var ev: Dictionary = view.get("public", {}).get("crisis", {})
 	if not ev.get("active", []).is_empty():
 		return "crisis"
 	var env := float(own.get("environment_micro", 0)) / 1000000.0
 	var sat := float(own.get("satisfaction_micro", 0) if own.get("satisfaction_micro") != null else 0) / 1000000.0
 	if env < 45.0:
 		return "polluted"
-	if env < 65.0 or sat < 55.0 or not ev.get("warnings", []).is_empty():
+	if env < 65.0 or sat < 55.0 or not ev.get("announced", []).is_empty():
 		return "strained"
 	return "calm"
 
@@ -85,9 +85,9 @@ static func state_for(view: Dictionary) -> String:
 ## Called with each new view: music state, and alerts for event transitions.
 func follow(view: Dictionary) -> void:
 	play_state(state_for(view))
-	var ev: Dictionary = view.get("public", {}).get("events", {})
+	var ev: Dictionary = view.get("public", {}).get("crisis", {})
 	var warnings := {}
-	for id in ev.get("warnings", []):
+	for id in ev.get("announced", []):
 		warnings[id] = true
 		if not _warned.has(id):
 			alert("warning")
