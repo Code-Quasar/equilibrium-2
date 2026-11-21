@@ -43,12 +43,27 @@ static func validate(m: Dictionary) -> String:
 	var fields: Dictionary = FIELDS[m.type].duplicate()
 	fields.merge({"v":TYPE_INT,"type":TYPE_STRING,"correlation_id":TYPE_STRING})
 	var optional: Dictionary = {"observed_tick":TYPE_INT} if m.type == "submit_action" else {}
+	if m.type in ["create_lobby","join_lobby"]: optional = {"city_name":TYPE_STRING}
 	if not shape(m,fields,optional): return "invalid_fields"
 	if not identifier(m.correlation_id): return "invalid_identifier"
 	if m.has("action_id") and not identifier(m.action_id): return "invalid_identifier"
 	if m.has("observed_tick") and (m.observed_tick < 0 or m.observed_tick > 1200): return "invalid_tick"
 	if m.type == "hello" and (m.client not in ["terminal","godot","test"] or m.client_version.length() > 64): return "invalid_client"
+	if m.has("city_name") and city_name_error(m.city_name) != "": return "invalid_city_name"
 	if m.type == "submit_action": return payload_error(m.kind,m.payload)
+	return ""
+
+## A city name: 2 to 20 letters, digits, spaces, apostrophes or hyphens,
+## with no space at either end or two in a row.
+const NAME_MIN := 2
+const NAME_MAX := 20
+static func city_name_error(name: String) -> String:
+	if name.length() < NAME_MIN or name.length() > NAME_MAX: return "length"
+	if name != name.strip_edges() or "  " in name: return "spaces"
+	for ch in name:
+		var c: int = ch.unicode_at(0)
+		var letter: bool = (c >= 65 and c <= 90) or (c >= 97 and c <= 122) or (c >= 0xC0 and c <= 0x24F)
+		if not (letter or (c >= 48 and c <= 57) or ch in " '-"): return "characters"
 	return ""
 
 static func payload_error(kind: String, p: Dictionary) -> String:

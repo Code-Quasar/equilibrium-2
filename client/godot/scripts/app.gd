@@ -18,6 +18,7 @@ var _menu_map: CityMap
 var _lift: Control
 var _typed_address := ""
 var _typed_code := ""
+var _typed_name := ""
 
 
 func _ready() -> void:
@@ -231,8 +232,29 @@ func _show_menu() -> void:
 	if portrait:
 		panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lay.add_child(panel)
-	var box := UI.vbox(10)
+	var box := UI.vbox(7)
 	panel.add_child(box)
+	box.add_child(UI.label("Your city name", "OnDarkCaption"))
+	var city := LineEdit.new()
+	city.theme_type_variation = "DarkField"
+	city.text = _typed_name if _typed_name != "" else Settings.city_name
+	city.placeholder_text = "e.g. Carthage"
+	city.max_length = 20
+	city.clear_button_enabled = true
+	city.custom_minimum_size.y = 44
+	box.add_child(city)
+	var name_err := UI.label("", "OnDarkError", true)
+	name_err.visible = false
+	box.add_child(name_err)
+	var check_name := func() -> bool:
+		var why := Settings.name_problem(city.text)
+		name_err.text = why
+		name_err.visible = why != ""
+		return why == ""
+	city.text_changed.connect(func(t: String):
+		_typed_name = t
+		if name_err.visible:
+			check_name.call())
 	box.add_child(UI.label("Server address", "OnDarkCaption"))
 	var addr := LineEdit.new()
 	addr.theme_type_variation = "DarkField"
@@ -241,7 +263,7 @@ func _show_menu() -> void:
 	addr.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_URL
 	addr.clear_button_enabled = true
 	addr.select_all_on_focus = false
-	addr.custom_minimum_size.y = 50
+	addr.custom_minimum_size.y = 44
 	box.add_child(addr)
 	var err := UI.label("", "OnDarkError", true)
 	err.visible = false
@@ -256,36 +278,54 @@ func _show_menu() -> void:
 		if err.visible:
 			check.call())
 	var go := func(then: Callable):
+		if not check_name.call():
+			city.grab_focus()
+			city.edit()
+			return
 		if not check.call():
 			addr.grab_focus()
 			addr.edit()
 			return
 		get_viewport().gui_release_focus()
 		Settings.address = Settings.url_to_address(addr.text.strip_edges())
+		Settings.city_name = city.text.strip_edges()
 		Settings.save()
 		then.call(Settings.address_to_url(addr.text))
-	var create := UI.button("Create game", "PrimaryButton", "plus", func(): go.call(func(u): session.create(u)))
-	create.custom_minimum_size.y = 52
+	var create := UI.button("Create game", "PrimaryButton", "plus", func(): go.call(func(u): session.create(u, Settings.city_name)))
+	create.custom_minimum_size.y = 46
 	box.add_child(create)
 	var code := LineEdit.new()
 	code.theme_type_variation = "DarkField"
 	code.text = _typed_code
-	code.placeholder_text = "Join code"
-	code.custom_minimum_size.y = 50
+	code.placeholder_text = "4-character code"
+	code.max_length = 4
+	code.custom_minimum_size.y = 44
 	code.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	code.text_changed.connect(func(t: String): _typed_code = t)
+	code.text_changed.connect(func(t: String):
+		# Codes are capitals; show them that way as they are typed.
+		var up := t.to_upper()
+		if up != t:
+			var at := code.caret_column
+			code.text = up
+			code.caret_column = at
+		_typed_code = up)
 	var join_now := func():
-		if code.text.strip_edges() == "":
-			toast("Enter the code the host shared", "warn")
+		if code.text.strip_edges().length() != 4:
+			toast("Enter the 4-character code the host shared", "warn")
 			code.grab_focus()
 			return
-		go.call(func(u): session.join(u, code.text))
+		go.call(func(u): session.join(u, code.text, Settings.city_name))
 	var join := UI.button("Join", "", "play", join_now)
-	join.custom_minimum_size = Vector2(110, 50)
+	join.custom_minimum_size = Vector2(110, 44)
 	box.add_child(UI.hbox(8, [code, join]))
 	# Done / Enter moves on: address → code → join.
 	# Enter/Done on a bad address keeps the field open for correction;
 	# on a good one the code field takes over.
+	city.keep_editing_on_text_submit = true
+	city.text_submitted.connect(func(_t):
+		if check_name.call():
+			addr.grab_focus()
+			addr.edit())
 	addr.keep_editing_on_text_submit = true
 	addr.text_submitted.connect(func(_t):
 		if check.call():
@@ -298,17 +338,17 @@ func _show_menu() -> void:
 	addr.focus_next = code.get_path()
 	if session.has_saved_seat():
 		var cont := UI.button("Continue your match", "SoftButton", "play", func(): session.rejoin())
-		cont.custom_minimum_size.y = 48
+		cont.custom_minimum_size.y = 42
 		box.add_child(cont)
 	var row := UI.hbox(8)
 	for item in [["How to Play", func(): _sub = "howto"; _show_menu()], ["Settings", func(): _open_settings()]]:
 		var b := UI.button(item[0], "GhostButton", "", item[1])
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.custom_minimum_size.y = 46
+		b.custom_minimum_size.y = 42
 		row.add_child(b)
 	if OS.get_name() not in ["iOS", "Web"]:
 		var ex := UI.button("Exit", "GhostButton", "", func(): get_tree().quit())
-		ex.custom_minimum_size = Vector2(80, 46)
+		ex.custom_minimum_size = Vector2(80, 42)
 		row.add_child(ex)
 	box.add_child(row)
 
@@ -627,7 +667,7 @@ func _show_lobby() -> void:
 	if session.join_code != "":
 		left.add_child(UI.label("Join code", "Caption"))
 		var code := UI.label(session.join_code, "Title")
-		code.add_theme_font_size_override("font_size", 30)
+		code.add_theme_font_size_override("font_size", 52)
 		left.add_child(code)
 		left.add_child(UI.label("Send it to your friends. They enter the same server address and join with it.", "Caption", true))
 		left.add_child(UI.button("Copy code", "SoftButton", "", func(): DisplayServer.clipboard_set(session.join_code); toast("Code copied", "good")))
@@ -646,7 +686,7 @@ func _show_lobby() -> void:
 		var who := "Open seat — a bot will play"
 		var ctl := str(row.get("controller", "open"))
 		if ctl == "human":
-			who = "You" if s == session.seat else "Player %d" % (s + 1)
+			who = "You" if s == session.seat else "Player"
 			if not row.get("ready", false):
 				all_ready = false
 		elif ctl == "bot":
@@ -654,7 +694,7 @@ func _show_lobby() -> void:
 		if s == session.seat:
 			my_ready = bool(row.get("ready", false))
 		var line := UI.hbox(10)
-		line.add_child(UI.label("City %d" % (s + 1), "Value"))
+		line.add_child(UI.label(session.city_name(s), "Value"))
 		line.add_child(UI.label(who, "Caption"))
 		line.add_child(UI.spacer())
 		if int(session.lobby.get("host_seat", -1)) == s:
@@ -694,7 +734,7 @@ func _show_draft() -> void:
 	elif mine:
 		status = "Your turn: pick the head start only your city will have."
 	elif turn >= 0:
-		status = "Waiting for City %d to choose…" % (turn + 1)
+		status = "Waiting for %s to choose…" % session.city_name(turn)
 	else:
 		status = "All chosen — the match is starting."
 	var st := UI.label(status, "Value", true)
@@ -707,7 +747,7 @@ func _show_draft() -> void:
 	for k in order.size():
 		var s := int(order[k])
 		var f: Variant = choices[s] if s < choices.size() else null
-		var who := "You" if s == session.seat else "City %d" % (s + 1)
+		var who := "You" if s == session.seat else session.city_name(s)
 		var txt := "%d. %s — %s" % [k + 1, who, Catalogue.FOUNDATIONS[f][0] if f != null else ("choosing…" if s == turn else "…")]
 		picks.add_child(UI.label(txt, "Caption"))
 	col.add_child(UI.panel("Card", picks))
@@ -818,7 +858,7 @@ func _show_results() -> void:
 	for r in rows:
 		var cid := int(r["city_id"])
 		var row := UI.hbox(10, [UI.label("%d" % int(r["rank"]), "Display")])
-		var name := ("Your city" if cid == session.seat else "City %d" % (cid + 1))
+		var name := ("%s (you)" % session.city_name(cid) if cid == session.seat else session.city_name(cid))
 		row.add_child(UI.vbox(0, [UI.label(name + ("  🏆" if cid in winners else ""), "Value"),
 			UI.label("Satisfaction %s · Environment %s" % [Catalogue.micro(r.get("satisfaction_micro", 0), 1), Catalogue.micro(r.get("environment_micro", 0), 1)], "Small")]))
 		row.add_child(UI.spacer())

@@ -63,6 +63,12 @@
               "minLength": 1,
               "maxLength": 64,
               "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "city_name": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 20,
+              "pattern": "^[A-Za-z0-9À-ɏ'-]+( [A-Za-z0-9À-ɏ'-]+)*$"
             }
           },
           "required": [
@@ -90,6 +96,12 @@
             "join_code": {
               "type": "string",
               "maxLength": 1024
+            },
+            "city_name": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 20,
+              "pattern": "^[A-Za-z0-9À-ɏ'-]+( [A-Za-z0-9À-ɏ'-]+)*$"
             }
           },
           "required": [

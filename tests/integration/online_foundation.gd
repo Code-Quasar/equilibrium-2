@@ -32,6 +32,7 @@ func _initialize() -> void:
 	check(scheduler.due(10000)==4 and scheduler.due(10000)==4 and scheduler.due(10000)==1,"debt retained")
 	scheduler.stop()
 	check(scheduler.due(20000)==0,"stop")
+	short_codes_and_city_names()
 	for humans in range(1,5): run_occupancy(humans)
 	determinism_and_market()
 	projection_is_recursive()
@@ -39,6 +40,40 @@ func _initialize() -> void:
 	schema_conformance()
 	print("Online foundation: %d checks, %d failures" % [checks,failures])
 	quit(1 if failures else 0)
+func short_codes_and_city_names() -> void:
+	var app = App.new()
+	for id in range(1,5):
+		app.connect_peer(id)
+		app.request(id,message("hello",{"client":"test","client_version":"1"}),0)
+	app.request(1,message("create_lobby",{"city_name":"Carthage"}),0)
+	var code: String = app.join_code
+	var readable := true
+	for ch in code: readable = readable and ch in app.CODE_ALPHABET
+	check(code.length()==4 and readable,"join code is 4 readable characters")
+	app.outbox.clear()
+	app.request(2,message("join_lobby",{"join_code":code.to_lower(),"city_name":"carthage"}),0)
+	check(app.outbox.any(func(item): return item.message.get("code","")=="city_name_taken"),"a city name is unique (any case)")
+	app.request(2,message("join_lobby",{"join_code":" "+code.to_lower()+" ","city_name":"Utica"}),0)
+	check(app.seats[1] != null and app.seats[1].name=="Utica","join code is case-insensitive; name kept")
+	app.outbox.clear()
+	app.request(3,message("join_lobby",{"join_code":code,"city_name":"x"}),0)
+	check(app.outbox.any(func(item): return item.message.get("code","")=="invalid_city_name"),"too short a name is rejected")
+	for bad in ["  Tunis", "Tunis  ", "A  B", "<script>", "a".repeat(21), "Tu\nnis"]:
+		check(Protocol.city_name_error(bad)!="","bad name rejected: "+bad)
+	for good in ["Tunis", "Sidi Bou Saïd", "Ksar-Hellal", "L'Ariana", "Bizerte 2"]:
+		check(Protocol.city_name_error(good)=="","good name accepted: "+good)
+	app.request(3,message("join_lobby",{"join_code":code}),0)
+	check(app.seats[2] != null and app.seats[2].name=="City 3","no name given: City N")
+	var rows: Array = []
+	for item in app.outbox:
+		if item.message.type == "lobby_state": rows = item.message.seats
+	check(rows.size()==4 and rows[0].name=="Carthage" and rows[1].name=="Utica","lobby shows every city name")
+	app.request(1,message("set_ready",{"ready":true}),0)
+	app.request(2,message("set_ready",{"ready":true}),0)
+	app.request(3,message("set_ready",{"ready":true}),0)
+	app.request(1,message("start_match"),0)
+	check(app.seats[3].controller=="bot" and app.seats[3].name=="Bot City 4","an empty seat gets a bot city name")
+
 func run_occupancy(humans: int) -> void:
 	var app = App.new()
 	for id in range(1,humans+1):

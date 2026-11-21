@@ -67,13 +67,15 @@ func request(id: int, m: Dictionary, now: int) -> void:
 		if m.type == "create_lobby":
 			if lobby_id != "": reject(id,m,"lobby_exists"); return
 			lobby_id = sessions.token().substr(0,24)
-			join_code = sessions.token().substr(0,16)
+			join_code = short_code()
 			lobby_expires = now+1800000
-		elif lobby_id == "" or now >= lobby_expires or m.join_code != join_code:
+		elif lobby_id == "" or now >= lobby_expires or m.join_code.strip_edges().to_upper() != join_code:
 			reject(id,m,"invalid_join_code"); return
 		seat = seats.find(null)
 		if seat < 0: reject(id,m,"lobby_full"); return
-		seats[seat] = {"controller":"human","ready":false}
+		var name: String = m.get("city_name","City %d" % (seat+1))
+		if name_taken(name): reject(id,m,"city_name_taken"); return
+		seats[seat] = {"controller":"human","ready":false,"name":name}
 		if host < 0: host = seat
 		var secret: String = sessions.create(seat,id,lobby_id,now)
 		emit(id,"seat_assigned",{"correlation_id":m.correlation_id,"lobby_id":lobby_id,"seat":seat,"host":seat==host,"rejoin_token":secret,"generation":1})
@@ -97,7 +99,7 @@ func request(id: int, m: Dictionary, now: int) -> void:
 			var bots: Array = []
 			for i in range(4):
 				if seats[i] == null:
-					seats[i] = {"controller":"bot","ready":true}
+					seats[i] = {"controller":"bot","ready":true,"name":bot_name(i)}
 					bots.append(i)
 			match_session = MatchSession.new()
 			error = match_session.initialize("match-"+lobby_id,seed_value,bots)
@@ -121,6 +123,21 @@ func request(id: int, m: Dictionary, now: int) -> void:
 				Bots.draft(match_session.game,match_session.gateway,match_session.bots)
 				publish_draft(now)
 		_: reject(id,m,"invalid_phase")
+
+## Four characters a player can read out and type: no 0/O or 1/I.
+const CODE_ALPHABET := "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+func short_code() -> String:
+	var code: String = ""
+	for b in sessions.crypto.generate_random_bytes(4):
+		code += CODE_ALPHABET[b % CODE_ALPHABET.length()]
+	return code
+func name_taken(name: String) -> bool:
+	for s in seats:
+		if s != null and str(s.get("name","")).to_lower() == name.to_lower(): return true
+	return false
+func bot_name(seat: int) -> String:
+	var name: String = "Bot City %d" % (seat+1)
+	return name if not name_taken(name) else "Bot %d" % (seat+1)
 
 func send_to_seat(seat: int, message: Dictionary) -> void:
 	if sessions.entries.has(seat):

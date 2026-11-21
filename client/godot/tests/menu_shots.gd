@@ -71,7 +71,7 @@ func _process(delta: float) -> bool:
 		0:
 			if t > 2.5:
 				shot("m1_menu")
-				var f: LineEdit = _find(app.screen, "LineEdit")[0]
+				var f: LineEdit = _find(app.screen, "LineEdit")[1]
 				f.text = "192.168.1:90x"
 				f.text_submitted.emit(f.text)
 				step += 1; t = 0

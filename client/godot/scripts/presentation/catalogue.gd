@@ -64,6 +64,8 @@ const ERRORS := {
 	"already_disabled": "Already off",
 	"building_not_owned": "Not your building",
 	"invalid_join_code": "No open lobby with that code",
+	"city_name_taken": "Another player already took that city name",
+	"invalid_city_name": "City names use 2–20 letters, digits, spaces, ' or -",
 	"lobby_full": "That lobby is full",
 	"lobby_started": "That match has already started",
 	"lobby_exists": "This server already hosts a lobby: join it with its code",

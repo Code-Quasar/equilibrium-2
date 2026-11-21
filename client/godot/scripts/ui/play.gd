@@ -1387,7 +1387,7 @@ func _market_panel() -> void:
 		var orate := int(o["rate_micro"])
 		var oprice := int(o["price_micro"])
 		var box := UI.vbox(4)
-		box.add_child(UI.label("%s %s %s at %s" % ["You sell" if seller == me else "City %d sells" % (seller + 1), Catalogue.micro(orate), _unit(otype) + " of " + Catalogue.SERVICES.get(otype, otype).to_lower(),
+		box.add_child(UI.label("%s %s %s at %s" % ["You sell" if seller == me else "%s sells" % session.city_name(seller), Catalogue.micro(orate), _unit(otype) + " of " + Catalogue.SERVICES.get(otype, otype).to_lower(),
 			Catalogue.micro(oprice, 2)], "", true))
 		if seller == me:
 			box.add_child(UI.button("Withdraw", "SoftButton", "close", func(): session.act("withdraw_offer", {"id": oid}, "Withdraw offer")))
@@ -1396,7 +1396,7 @@ func _market_panel() -> void:
 			var hold := float(orate) * float(dur) / 60.0 * float(oprice) / (Catalogue.MICRO * Catalogue.MICRO)
 			box.add_child(UI.label("For %s your escrow holds up to %s." % [Catalogue.clock(dur), String.num(hold, 2)], "Caption", true))
 			box.add_child(UI.button("Accept", "PrimaryButton", "check", func():
-				session.act("accept_offer", {"id": oid, "duration": int(market_form["duration"])}, "Accept offer from City %d" % (seller + 1))))
+				session.act("accept_offer", {"id": oid, "duration": int(market_form["duration"])}, "Accept offer from %s" % session.city_name(seller))))
 		_card(box)
 	if not any:
 		_card(UI.label("No open offers.", "Caption"))
@@ -1412,7 +1412,7 @@ func _market_panel() -> void:
 		var sell: bool = int(k["seller"]) == me
 		var delivered := float(k.get("delivered_micro", 0)) / (60.0 if ktype == "electricity" else 1.0)
 		var box := UI.vbox(4)
-		box.add_child(UI.label("%s %s: %s %s — delivered %s %s, paid %s, ends in %s" % ["You sell to" if sell else "You buy from", "City %d" % (int(k["buyer"] if sell else k["seller"]) + 1),
+		box.add_child(UI.label("%s %s: %s %s — delivered %s %s, paid %s, ends in %s" % ["You sell to" if sell else "You buy from", session.city_name(int(k["buyer"] if sell else k["seller"])),
 			Catalogue.micro(k["rate_micro"]), _unit(ktype) + " of " + Catalogue.SERVICES.get(ktype, ktype).to_lower(), Catalogue.micro(delivered, 1),
 			"E·min" if ktype == "electricity" else "units", Catalogue.micro(k.get("paid_micro", 0), 2), Catalogue.clock(int(k["end_tick"]) - tick())], "", true))
 		box.add_child(_danger("cc%d" % cid, "Cancel", "cancel_contract", {"id": cid}, "Cancel contract"))
@@ -1440,7 +1440,7 @@ func _rivals_panel() -> void:
 				f = Catalogue.FOUNDATIONS.get(str(o.get("foundation", "")), [""])[0]
 		if cid == session.seat:
 			f = Catalogue.FOUNDATIONS.get(str(own().get("foundation", "")), [""])[0]
-		box.add_child(UI.hbox(8, [UI.label("#%d %s" % [int(r["rank"]), "Your city" if cid == session.seat else "City %d" % (cid + 1)], "Value"), UI.spacer(), UI.label("%s residents" % Catalogue.fmt(r["population"]), "Value")]))
+		box.add_child(UI.hbox(8, [UI.label("#%d %s" % [int(r["rank"]), ("%s (you)" % session.city_name(cid)) if cid == session.seat else session.city_name(cid)], "Value"), UI.spacer(), UI.label("%s residents" % Catalogue.fmt(r["population"]), "Value")]))
 		box.add_child(UI.bar(float(r["population"]) / maxf(total, 1) * 2.0, UI.PEOPLE if cid != session.seat else UI.PRIMARY))
 		var sat: String = Catalogue.micro(r["satisfaction_micro"], 1) if r.get("satisfaction_micro") != null else "–"
 		box.add_child(UI.label("%s · Satisfaction %s · Environment %s" % [f, sat, Catalogue.micro(r.get("environment_micro", 0), 1)], "Small", true))
@@ -1501,7 +1501,7 @@ func _visit_refresh() -> void:
 		visit(-1)
 		return
 	var f: String = Catalogue.FOUNDATIONS.get(str(o.get("foundation", "")), ["No Foundation"])[0]
-	_visit_label.text = "Visiting City %d · %s · %s residents · view only" % [visiting + 1, f, Catalogue.fmt(float(o.get("population", 0)))]
+	_visit_label.text = "Visiting %s · %s · %s residents · view only" % [session.city_name(visiting), f, Catalogue.fmt(float(o.get("population", 0)))]
 	var bs := []
 	for b in o.get("buildings", []):
 		bs.append({"id": 100000 + int(b["tile"]), "tile": int(b["tile"]), "type": str(b["type"]), "size": str(b.get("size", "S")),

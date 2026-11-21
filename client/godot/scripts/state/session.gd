@@ -49,12 +49,26 @@ func _ready() -> void:
 
 # ---------------------------------------------------------------- intents ---
 
-func create(url: String) -> void:
-	_start(url, {"type": "create_lobby"})
+func create(url: String, city := "") -> void:
+	var m := {"type": "create_lobby"}
+	if city.strip_edges() != "":
+		m["city_name"] = city.strip_edges()
+	_start(url, m)
 
 
-func join(url: String, code: String) -> void:
-	_start(url, {"type": "join_lobby", "join_code": code.strip_edges()})
+func join(url: String, code: String, city := "") -> void:
+	var m := {"type": "join_lobby", "join_code": code.strip_edges().to_upper()}
+	if city.strip_edges() != "":
+		m["city_name"] = city.strip_edges()
+	_start(url, m)
+
+
+## The name a seat's player chose, from the lobby the server sent.
+func city_name(s: int) -> String:
+	for row in lobby.get("seats", []):
+		if int(row.get("seat", -1)) == s and str(row.get("name", "")) != "":
+			return str(row["name"])
+	return "City %d" % (s + 1)
 
 
 func has_saved_seat() -> bool:

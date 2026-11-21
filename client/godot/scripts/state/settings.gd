@@ -12,6 +12,7 @@ static var muted := false
 static var secure := false          # wss:// instead of ws://
 static var diagnostics := false     # developer network overlay
 static var address := ""            # host:port as typed
+static var city_name := ""          # the player's chosen city name
 static var _loaded := false
 
 
@@ -39,6 +40,7 @@ static func load_all() -> void:
 		secure = bool(c.get_value("net", "secure", secure))
 		diagnostics = bool(c.get_value("net", "diagnostics", diagnostics))
 		address = str(c.get_value("net", "address", address))
+		city_name = str(c.get_value("player", "city_name", city_name))
 	apply_audio()
 
 
@@ -51,6 +53,7 @@ static func save() -> void:
 	c.set_value("net", "secure", secure)
 	c.set_value("net", "diagnostics", diagnostics)
 	c.set_value("net", "address", address)
+	c.set_value("player", "city_name", city_name)
 	c.save(PATH)
 	apply_audio()
 
@@ -78,6 +81,23 @@ static func _bus(name: String, v: float) -> void:
 	if i >= 0:
 		AudioServer.set_bus_volume_db(i, linear_to_db(maxf(v, 0.0001)))
 		AudioServer.set_bus_mute(i, v <= 0.001 or (i == 0 and muted))
+
+
+## What is wrong with a city name ("" when fine); the server applies the same rule.
+static func name_problem(text: String) -> String:
+	var n := text.strip_edges()
+	if n.length() < 2:
+		return "Choose a city name (at least 2 characters)"
+	if n.length() > 20:
+		return "A city name has at most 20 characters"
+	if "  " in n:
+		return "Use single spaces in the name"
+	for ch in n:
+		var c := ch.unicode_at(0)
+		var letter := (c >= 65 and c <= 90) or (c >= 97 and c <= 122) or (c >= 0xC0 and c <= 0x24F)
+		if not (letter or (c >= 48 and c <= 57) or ch in " '-"):
+			return "Use letters, digits, spaces, ' or - only"
+	return ""
 
 
 ## What is wrong with a typed address ("" when it is fine). Accepts host,

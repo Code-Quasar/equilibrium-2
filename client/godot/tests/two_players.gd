@@ -61,13 +61,14 @@ func _process(delta: float) -> bool:
 		return false
 	match step:
 		0:
-			a.create(url)
+			a.create(url, "Carthage")
 			next()
 		1:
 			if a.join_code != "" and a.phase == "lobby":
 				ok(a.seat >= 0 and a.is_host, "host seated and marked host")
 				ok(a.has_saved_seat(), "rejoin credential saved privately")
-				b.join(url, a.join_code)
+				ok(a.join_code.length() == 4, "the join code is 4 characters (%s)" % a.join_code)
+				b.join(url, a.join_code.to_lower(), "Utica")
 				next()
 		2:
 			if b.phase == "lobby" and b.seat >= 0:
@@ -80,6 +81,7 @@ func _process(delta: float) -> bool:
 				if r["controller"] == "human":
 					humans += 1
 			ok(humans == 2, "host's lobby shows both humans")
+			ok(a.city_name(a.seat) == "Carthage" and a.city_name(b_seat) == "Utica", "both players see the chosen city names")
 			a.start_match()  # not everyone ready yet: must be refused
 			next(0.5)
 		4:
