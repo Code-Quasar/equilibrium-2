@@ -1,5 +1,5 @@
 class_name Traffic
-extends Node2D
+extends Node3D
 ## Cars driving the streets. How many there are follows the city's real
 ## population and its working job buildings (factories, shops, services) from
 ## the last player_view; cars head mostly toward those workplaces. They keep
@@ -20,6 +20,7 @@ var _jobs: Array[Vector2i] = []
 var _time := 0.0
 var _rng := RandomNumberGenerator.new()
 var _version := -1
+var _models: Array[Node3D] = []
 
 
 func _ready() -> void:
@@ -37,7 +38,8 @@ func set_demand(city: Dictionary, l: CityLayout) -> void:
 			jobs += 1
 			var r := l.rect(t)
 			_jobs.append(Vector2i(r.position.x - 1, r.position.y - 1))
-	target = clampi(int(float(city.get("population", 0)) / 45.0) + jobs * 6, 6, 90)
+	# Light, readable traffic: a car per ~120 residents plus two per workplace.
+	target = clampi(int(float(city.get("population", 0)) / 120.0) + jobs * 2, 3, 18)
 
 
 func _process(delta: float) -> void:
@@ -62,7 +64,7 @@ func _process(delta: float) -> void:
 			if _cars[i]["d"] < 0.05:
 				_cars.remove_at(i)
 				break
-	queue_redraw()
+	_render()
 
 
 func _spawn() -> void:
@@ -119,23 +121,22 @@ func _next(node: Vector2i, car: Dictionary) -> Vector2i:
 	return options[_rng.randi() % options.size()]
 
 
-func _draw() -> void:
-	for car in _cars:
+## Each car is a Kenney car model, driving on the right half of the street.
+func _render() -> void:
+	while _models.size() < _cars.size():
+		var m := Models.spawn(Models.CARS[_rng.randi() % Models.CARS.size()])
+		m.scale = Vector3.ONE * 0.27
+		add_child(m)
+		_models.append(m)
+	while _models.size() > _cars.size():
+		_models.pop_back().queue_free()
+	for i in _cars.size():
+		var car: Dictionary = _cars[i]
 		var a := Vector2(car["from"]) + Vector2(0.5, 0.5)
 		var b := Vector2(car["to"]) + Vector2(0.5, 0.5)
 		var dir := (b - a).normalized()
-		# Drive on the right half of the street.
 		var lane := Vector2(-dir.y, dir.x) * 0.22
 		var p := a + dir * float(car["d"]) + lane
-		var c := CityMap.iso(p.x, p.y)
-		var along := CityMap.iso(dir.x, dir.y) * 0.32
-		var side := CityMap.iso(-dir.y, dir.x) * 0.16
-		var body := PackedVector2Array([c - along - side, c + along - side, c + along + side, c - along + side])
-		var col: Color = car["color"]
-		draw_colored_polygon(body, col.darkened(0.25))
-		var roof := PackedVector2Array()
-		for v in body:
-			roof.append(v + Vector2(0, -2.2))
-		draw_colored_polygon(roof, col)
-		if car["wait"] > 0.5:
-			draw_circle(c - along + Vector2(0, -1.5), 0.9, Color("#ff3b2f"))
+		var m: Node3D = _models[i]
+		m.position = Vector3(p.x, 0.03, p.y)
+		m.rotation.y = atan2(dir.x, dir.y)

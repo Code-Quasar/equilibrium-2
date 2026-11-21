@@ -32,6 +32,15 @@ static func events(source: Dictionary) -> Dictionary:
 		"interval_start":source.get("interval_start",0) if typeof(source.get("interval_start"))==TYPE_INT else 0
 	}
 
+## What anyone could see looking at a rival city: which buildings stand where,
+## at what level, finished or not. Nothing about money, power, staffing,
+## projects or whether a building is switched off.
+static func skyline(city: Dictionary) -> Array:
+	var result: Array = []
+	for b in city.get("buildings",[]):
+		result.append(pick(b,["type","tile","level","status"]))
+	return result
+
 static func project(state: Dictionary, seat: int) -> Dictionary:
 	assert(seat >= 0 and seat < 4)
 	var rankings: Array = []
@@ -40,7 +49,10 @@ static func project(state: Dictionary, seat: int) -> Dictionary:
 	var public: Dictionary = {"match_id":state.match_id,"tick":state.tick,"phase":state.status,"duration_ticks":1200,"foundations":strings(state.foundations),"rankings":rankings,"events":events(state.event_state)}
 	var opponents: Array = []
 	for c in state.cities:
-		if c.city_id != seat: opponents.append(pick(c,["city_id","foundation","population","satisfaction_micro","environment_micro","development_micro"]))
+		if c.city_id != seat:
+			var other: Dictionary = pick(c,["city_id","foundation","population","satisfaction_micro","environment_micro","development_micro"])
+			other.buildings = skyline(c)
+			opponents.append(other)
 	var city: Dictionary = state.cities[seat]
 	var own: Dictionary = pick(city,["city_id","foundation","population","money_micro","materials_micro","uncollected_micro","sorted_micro","environment_micro","air_micro","effective_air_micro","landfill_damage_micro","overflow_micro","satisfaction_micro","development_micro","reduce_waste","policy_active","policy_change_at","previous_biogas_micro_E","disposed_this_tick"])
 	own.uncollected_micro = integers(city.get("uncollected_micro",[]))

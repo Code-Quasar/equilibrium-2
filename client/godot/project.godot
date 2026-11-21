@@ -10,7 +10,7 @@ config/name="EQUILIBRIUM Client"
 config/description="Four cities. One shared population. Twenty minutes."
 run/main_scene="res://main.tscn"
 config/features=PackedStringArray("4.5", "GL Compatibility")
-config/icon="res://icon.svg"
+config/icon="res://assets/brand/app_icon.svg"
 
 [display]
 

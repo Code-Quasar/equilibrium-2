@@ -51,6 +51,24 @@ touch → screen (scripts/app.gd, scripts/ui/*) → Session.act / intent methods
   - **Traffic:** cars follow the real population and working workplaces, queue behind each other and wait at junctions, so busy roads jam. Traffic itself changes nothing in the game.
   - **Tests:** `tests/road_rule.gd` checks the map rules and, against a real server, that an unconnected building is switched off by the engine and switched back on once a road reaches it.
 
+## Art and sound
+
+The game uses Kenney asset packs (www.kenney.nl, CC0 public domain), copied into `assets/kenney/` with their licence files:
+
+| Pack | Used for |
+|---|---|
+| City Kit Suburban, Commercial, Industrial | Homes, shops, services, factories, power plants, recycling, recovery and biogas |
+| City Kit Roads | Every road piece (straights, bends, junctions, ends, bridge) and construction cones |
+| Car Kit | Traffic, garbage trucks, bulldozer at the landfill |
+| Factory Kit | Conveyors and crates (recycling, landfill) |
+| Nature Kit | Forests and Green Space |
+| UI Pack | Buttons, panels, round buttons, Kenney Future fonts |
+| Interface Sounds | Button clicks |
+
+- **3D map** (`ui/city_map.gd`): the map is a 3D scene seen through an orthographic isometric camera. `presentation/models.gd` lists which models make up each building at each level, and road pieces are chosen and turned from their neighbours (`tests/roads_view.gd` renders every road shape from above to check this).
+- **Thumbnails** (`ui/thumbs.gd`): build cards and menus use pictures rendered once from the same 3D models.
+- **Old art still used:** the HUD badges and the need-bubble icons still come from the earlier art bundle (`assets/art.json`), because the Kenney packs have no matching icons for homes, jobs, power and so on.
+
 ## Audit: earlier UI against the final engine
 
 | Element of the earlier UI | Verdict | Now |

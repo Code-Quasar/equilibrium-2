@@ -110,11 +110,11 @@ func _process(delta: float) -> bool:
 					if far_at.x < 0 and L.why_not(Vector2i(x, y)) == "" and Vector2(x, y).distance_to(Vector2(mp)) > 12:
 						far_at = Vector2i(x, y)
 			play().start_placing("residential_district")
-			play()._snap(far_at + Vector2i(2, 2))
+			play()._snap(far_at + Vector2i(1, 1))
 			far_tile = play()._free_tile()
 			play()._confirm_place()
 			play().start_placing("green_space")
-			play()._snap(near_at + Vector2i(2, 2))
+			play()._snap(near_at + Vector2i(1, 1))
 			near_tile = play()._free_tile()
 			play()._confirm_place()
 			print("   far_at %s tile %d placed %s linked %s | near_at %s tile %d placed %s linked %s" % [far_at, far_tile, L.placements.has(far_tile), L.linked(far_tile), near_at, near_tile, L.placements.has(near_tile), L.linked(near_tile)])

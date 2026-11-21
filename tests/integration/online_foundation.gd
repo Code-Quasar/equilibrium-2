@@ -77,6 +77,8 @@ func run_occupancy(humans: int) -> void:
 		var v: Dictionary = View.project(state,seat)
 		check(app.match_session.game.engine.serialize()==before,"view pure")
 		for other in v.opponents: check(not other.has("money_micro") and not other.has("materials_micro"),"private opponents")
+		for other in v.opponents:
+			for b in other.buildings: check(b.keys().all(func(k): return k in ["type","tile","level","status"]),"opponent skyline is public only")
 		var serialized: String = Protocol.Canonical.encode(v)
 		for key in ["rng_state","fingerprint","command_results","last_command_seq","pending_commands","rate_carries","reserved","ledger","rejoin_token"]:
 			check(not serialized.contains('"'+key+'"'),"no "+key)
@@ -135,11 +137,17 @@ func projection_is_recursive() -> void:
 	state.contracts.append({"id":92,"buyer":0,"seller":1,"type":{"secret":"contract-internal"},"rate":1,"price":1,"start_tick":0,"end_tick":90,"status":"active","delivered":1,"paid":1,"last_delivery":1,"booking_micro":1,"booking_refunded":false,"renewals":[0,{"secret":"renewal-internal"}],"private":true})
 	state.market.notifications.append({"time":1,"contract":92,"kind":"expiry_warning","result":{"secret":"notification-internal"},"participants":[0,1]})
 	state.cities[0].capacity.housing = {"secret":"city-internal"}
+	state.cities[1].buildings.append({"id":99,"type":"factory","tile":35,"level":1,"status":"complete","enabled":false,"funded":false,"power_factor_micro":1,"money_paid_micro":{"secret":"building-internal"}})
 	for seat in range(4):
 		var view: Dictionary = View.project(state,seat)
 		var encoded: String = Protocol.Canonical.encode(view)
 		for secret in ["event-internal","warning-internal","offer-internal","request-internal","contract-internal","renewal-internal","notification-internal","city-internal","debug","private","participants"]:
 			check(not encoded.contains(secret),"nested projection hides "+secret)
+		check(not encoded.contains("building-internal"),"rival building internals hidden")
+		if seat != 1:
+			var rival: Dictionary = view.opponents.filter(func(o): return o.city_id==1)[0]
+			var visible: Array = rival.buildings.filter(func(b): return b.tile==35)
+			check(visible.size()==1 and visible[0].keys().size()==4 and not visible[0].has("enabled") and not visible[0].has("power_factor_micro"),"rival skyline: type, tile, level, status only")
 		check(view.public.events.active.size() == state.event_state.active.size()-1,"public active events retained")
 		check(view.marketplace.offers.any(func(o): return o.id==90),"public offers retained")
 		check(view.marketplace.requests.any(func(r): return r.id==91),"public requests retained")

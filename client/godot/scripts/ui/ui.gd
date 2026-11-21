@@ -1,6 +1,7 @@
 class_name UI
 extends RefCounted
-## The style guide (design/style-guide.html) as a Godot theme, plus small
+## The game's theme, built on the Kenney UI pack (CC0): its 9-slice buttons
+## and panels, its Kenney Future font and its interface sounds, plus small
 ## factories so screens can be built in code.
 
 const PAPER := Color("#fbf8f1")
@@ -26,6 +27,46 @@ const CATEGORY := {
 }
 
 static var art: Art
+static var sound: AudioStreamPlayer      # set by the app; plays the click
+static var thumbs: Thumbs                # set by the app; pictures of buildings
+static var music: Soundtrack             # set by the app; ambient music and alerts
+const KUI := "res://assets/kenney/ui/PNG/"
+const COLOURS := {"btn_blue": "Blue", "btn_green": "Green", "btn_orange": "Yellow", "btn_red": "Red", "btn_purple": "Blue"}
+
+
+## A Kenney UI image as a 9-slice style; depth images keep their bottom lip.
+static func kbox(colour: String, image: String, pad := 10, side := 14) -> StyleBoxTexture:
+	var s := StyleBoxTexture.new()
+	s.texture = load(KUI + colour + "/Default/" + image + ".png")
+	var depth := image.contains("depth")
+	s.texture_margin_left = 16
+	s.texture_margin_right = 16
+	s.texture_margin_top = 14
+	s.texture_margin_bottom = 20 if depth else 14
+	s.content_margin_left = side
+	s.content_margin_right = side
+	s.content_margin_top = pad
+	s.content_margin_bottom = pad + (4 if depth else 0)
+	return s
+
+
+static var _numbers: SystemFont
+
+
+## A plain bold font for figures on the HUD, where "1,200/1,150" and "88%"
+## must read at a glance.
+static func number_font() -> Font:
+	if _numbers == null:
+		_numbers = SystemFont.new()
+		_numbers.font_names = PackedStringArray(["Noto Sans", "Roboto", "DejaVu Sans", "sans-serif"])
+		_numbers.font_weight = 800
+	return _numbers
+
+
+## The click from the Kenney interface sounds.
+static func click() -> void:
+	if sound and sound.is_inside_tree():
+		sound.play()
 
 
 static func box(bg: Color, radius := 16, border := Color(0, 0, 0, 0), border_w := 0, lip := 0, lip_color := Color(0, 0, 0, 0), pad := 12) -> StyleBoxFlat:
@@ -45,12 +86,15 @@ static func box(bg: Color, radius := 16, border := Color(0, 0, 0, 0), border_w :
 
 static func make_theme() -> Theme:
 	var t := Theme.new()
-	var regular := SystemFont.new()
-	regular.font_names = PackedStringArray(["Nunito", "Roboto", "Noto Sans", "sans-serif"])
-	regular.font_weight = 600
-	var bold := SystemFont.new()
-	bold.font_names = regular.font_names
-	bold.font_weight = 800
+	var regular: FontFile = load("res://assets/kenney/ui/Kenney Future Narrow.ttf")
+	var bold: FontFile = load("res://assets/kenney/ui/Kenney Future.ttf")
+	# Symbols the Kenney fonts lack (%, ·, emoji) come from the system font.
+	var fallback := SystemFont.new()
+	fallback.font_names = PackedStringArray(["Noto Sans", "Roboto", "DejaVu Sans", "sans-serif"])
+	var emoji := SystemFont.new()
+	emoji.font_names = PackedStringArray(["Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji"])
+	for f in [regular, bold]:
+		f.fallbacks = [fallback, emoji]
 	t.default_font = regular
 	t.default_font_size = 16
 
@@ -70,7 +114,7 @@ static func make_theme() -> Theme:
 	sheet.shadow_size = 14
 	t.set_stylebox("panel", "Sheet", sheet)
 	t.set_type_variation("Card", "PanelContainer")
-	t.set_stylebox("panel", "Card", box(Color.WHITE, 14, LINE, 1, 3, LINE, 10))
+	t.set_stylebox("panel", "Card", kbox("Grey", "button_square_depth_flat", 10, 12))
 	t.set_type_variation("Glass", "PanelContainer")
 	var glass := box(Color(PAPER, 0.95), 14, Color(0, 0, 0, 0), 0, 0, Color(), 8)
 	glass.shadow_color = Color(0, 0, 0, 0.18)
@@ -80,10 +124,10 @@ static func make_theme() -> Theme:
 	t.set_type_variation("Chip", "PanelContainer")
 	t.set_stylebox("panel", "Chip", box(PAPER2, 99, Color(), 0, 0, Color(), 6))
 
-	_button(t, "Button", Color.WHITE, LIP, INK, regular)
-	_button(t, "PrimaryButton", PRIMARY, PRIMARY_DARK, Color.WHITE, bold)
-	_button(t, "DangerButton", DANGER, DANGER_DARK, Color.WHITE, bold)
-	_button(t, "SoftButton", PAPER2, LINE, INK, regular)
+	_button(t, "Button", "Blue", Color.WHITE, bold)
+	_button(t, "PrimaryButton", "Green", Color.WHITE, bold)
+	_button(t, "DangerButton", "Red", Color.WHITE, bold)
+	_button(t, "SoftButton", "Grey", INK, bold)
 	t.set_type_variation("TabButton", "Button")
 	var flat := box(Color(0, 0, 0, 0), 12, Color(), 0, 0, Color(), 4)
 	for st in ["normal", "hover", "pressed", "focus", "disabled", "hover_pressed"]:
@@ -111,7 +155,7 @@ static func make_theme() -> Theme:
 	t.set_color("font_hover_color", "PopupMenu", PRIMARY)
 
 	# HUD text sits straight on the map: white with a dark outline.
-	for v in [["HudValue", 19, bold], ["HudSmall", 12, bold], ["HudCaption", 11, bold]]:
+	for v in [["HudValue", 19, regular], ["HudSmall", 12, regular], ["HudCaption", 11, regular]]:
 		t.set_type_variation(v[0], "Label")
 		t.set_font_size("font_size", v[0], v[1])
 		t.set_font("font", v[0], v[2])
@@ -127,31 +171,154 @@ static func make_theme() -> Theme:
 	var dock := box(Color(0.07, 0.11, 0.14, 0.62), 22, Color(1, 1, 1, 0.12), 1, 0, Color(), 8)
 	t.set_stylebox("panel", "Dock", dock)
 	t.set_type_variation("Side", "PanelContainer")
-	var side := box(PAPER, 22, LINE, 1, 0, Color(), 14)
-	side.shadow_color = Color(0, 0, 0, 0.3)
-	side.shadow_size = 16
-	t.set_stylebox("panel", "Side", side)
+	t.set_stylebox("panel", "Side", kbox("Grey", "button_square_flat", 14, 14))
 	t.set_stylebox("background", "ProgressBar", box(PAPER2, 99, Color(), 0, 0, Color(), 0))
 	t.set_stylebox("fill", "ProgressBar", box(PRIMARY, 99, Color(), 0, 0, Color(), 0))
 	t.set_constant("separation", "VBoxContainer", 8)
 	t.set_constant("separation", "HBoxContainer", 8)
 	t.set_stylebox("panel", "ScrollContainer", StyleBoxEmpty.new())
+	for c in ["LineEdit", "SpinBox"]:
+		t.set_color("caret_color", c, PRIMARY_DARK)
+		t.set_constant("caret_width", c, 2)
+		t.set_color("font_placeholder_color", c, Color(MUTED, 0.75))
+		t.set_color("selection_color", c, Color(PRIMARY, 0.3))
+
+	# Dark glass: the menu, modals and popovers over the 3D world.
+	t.set_type_variation("DarkGlass", "PanelContainer")
+	var dg := box(Color(0.05, 0.09, 0.12, 0.78), 22, Color(1, 1, 1, 0.14), 1, 0, Color(), 22)
+	dg.shadow_color = Color(0, 0, 0, 0.35)
+	dg.shadow_size = 18
+	t.set_stylebox("panel", "DarkGlass", dg)
+	t.set_type_variation("Modal", "PanelContainer")
+	var md := box(Color("#14222c"), 22, Color(1, 1, 1, 0.16), 1, 0, Color(), 20)
+	md.shadow_color = Color(0, 0, 0, 0.45)
+	md.shadow_size = 24
+	t.set_stylebox("panel", "Modal", md)
+	t.set_type_variation("Inset", "PanelContainer")
+	t.set_stylebox("panel", "Inset", box(Color(1, 1, 1, 0.06), 14, Color(1, 1, 1, 0.08), 1, 0, Color(), 12))
+	for v in [["Wordmark", 46, bold, Color.WHITE], ["OnDarkTitle", 21, bold, Color.WHITE], ["OnDark", 15, regular, Color("#dfe9ee")],
+			["OnDarkCaption", 13, regular, Color("#9fb3bd")], ["OnDarkError", 13, regular, Color("#ff9c8a")], ["Chapter", 12, bold, Color("#69e0b4")]]:
+		t.set_type_variation(v[0], "Label")
+		t.set_font_size("font_size", v[0], v[1])
+		t.set_font("font", v[0], v[2])
+		t.set_color("font_color", v[0], v[3])
+	t.set_constant("outline_size", "Wordmark", 0)
+	t.set_type_variation("GhostButton", "Button")
+	for st in ["normal", "hover", "pressed", "focus", "disabled", "hover_pressed"]:
+		var a: float = {"normal": 0.08, "hover": 0.16, "pressed": 0.22, "focus": 0.12, "disabled": 0.04, "hover_pressed": 0.22}[st]
+		var g := box(Color(1, 1, 1, a), 14, Color(1, 1, 1, 0.18 if st != "focus" else 0.5), 1, 0, Color(), 10)
+		g.content_margin_top = 10
+		g.content_margin_bottom = 10
+		t.set_stylebox(st, "GhostButton", g)
+	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
+		t.set_color(c, "GhostButton", Color.WHITE)
+	t.set_color("font_disabled_color", "GhostButton", Color(1, 1, 1, 0.35))
+	t.set_color("icon_normal_color", "GhostButton", Color.WHITE)
+	t.set_font("font", "GhostButton", bold)
+	t.set_font_size("font_size", "GhostButton", 15)
+	for st in ["normal", "hover", "pressed", "focus", "disabled", "hover_pressed"]:
+		var cb := box(Color(1, 1, 1, 0.1 if st in ["hover", "hover_pressed"] else 0.05), 12, Color(1, 1, 1, 0.35 if st == "focus" else 0.1), 1, 0, Color(), 10)
+		t.set_stylebox(st, "CheckButton", cb)
+	t.set_font("font", "CheckButton", regular)
+	t.set_font_size("font_size", "CheckButton", 15)
+	t.set_type_variation("DarkField", "LineEdit")
+	var df := box(Color(1, 1, 1, 0.93), 12, Color(1, 1, 1, 0), 0, 0, Color(), 10)
+	t.set_stylebox("normal", "DarkField", df)
+	t.set_stylebox("focus", "DarkField", box(Color.WHITE, 12, Color("#69e0b4"), 2, 0, Color(), 10))
+	t.set_type_variation("DarkSlider", "HSlider")
+	t.set_stylebox("slider", "HSlider", box(Color(0, 0, 0, 0.25), 99, Color(), 0, 0, Color(), 3))
+	t.set_stylebox("grabber_area", "HSlider", box(PRIMARY, 99, Color(), 0, 0, Color(), 3))
+	t.set_stylebox("grabber_area_highlight", "HSlider", box(PRIMARY, 99, Color(), 0, 0, Color(), 3))
 	return t
 
 
-static func _button(t: Theme, kind: String, bg: Color, lip_col: Color, fg: Color, font: Font) -> void:
+## Space the device keeps for notches, rounded corners and system bars, in the
+## interface's own units: [left, top, right, bottom].
+static func safe_margins(node: CanvasItem) -> Array:
+	var win := DisplayServer.window_get_size()
+	var safe := DisplayServer.get_display_safe_area()
+	if win.x <= 0 or safe.size.x <= 0 or OS.get_name() not in ["Android", "iOS"]:
+		return [0, 0, 0, 0]
+	var vp := node.get_viewport_rect().size
+	var k := vp.x / float(win.x)
+	return [maxf(safe.position.x, 0) * k, maxf(safe.position.y, 0) * k,
+		maxf(win.x - safe.end.x, 0) * k, maxf(win.y - safe.end.y, 0) * k]
+
+
+## A modal over everything: dims the screen, closes on the backdrop or Close,
+## keeps inside the safe area and scrolls when it is taller than the screen.
+## Returns [overlay, content column]; free the overlay to close it.
+static func modal(host: Control, title: String, max_w := 560.0, on_close: Callable = Callable()) -> Array:
+	var over := Control.new()
+	over.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	over.mouse_filter = Control.MOUSE_FILTER_STOP
+	over.z_index = 20
+	var dim := ColorRect.new()
+	dim.color = Color(0.02, 0.04, 0.06, 0.62)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	over.add_child(dim)
+	var close := func():
+		if on_close.is_valid():
+			on_close.call()
+		over.queue_free()
+	dim.gui_input.connect(func(e: InputEvent):
+		if (e is InputEventMouseButton or e is InputEventScreenTouch) and e.pressed:
+			close.call())
+	var m := MarginContainer.new()
+	m.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	m.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sm := safe_margins(host)
+	for i in 4:
+		m.add_theme_constant_override("margin_" + ["left", "top", "right", "bottom"][i], int(sm[i]) + 18)
+	over.add_child(m)
+	var center := CenterContainer.new()
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	m.add_child(center)
+	var p := PanelContainer.new()
+	p.theme_type_variation = "Modal"
+	var vp := host.get_viewport_rect().size
+	var w: float = minf(max_w, vp.x - sm[0] - sm[2] - 36)
+	var h: float = vp.y - sm[1] - sm[3] - 36
+	p.custom_minimum_size.x = w
+	center.add_child(p)
+	var col := vbox(12)
+	p.add_child(col)
+	var head := hbox(10)
+	var tl := label(title, "OnDarkTitle")
+	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(tl)
+	var x := Button.new()
+	x.text = "✕"
+	x.theme_type_variation = "GhostButton"
+	x.custom_minimum_size = Vector2(44, 44)
+	x.pressed.connect(func(): click(); close.call())
+	head.add_child(x)
+	col.add_child(head)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(scroll)
+	var body := vbox(12)
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(body)
+	# Grow with the content but never past the screen; beyond that, scroll.
+	var fit := func():
+		var want := body.get_combined_minimum_size().y
+		scroll.custom_minimum_size.y = clampf(want, 40.0, maxf(h - 44 - 12 - 40, 80.0))
+	body.minimum_size_changed.connect(fit)
+	fit.call_deferred()
+	host.add_child(over)
+	return [over, body]
+
+
+static func _button(t: Theme, kind: String, colour: String, fg: Color, font: Font) -> void:
 	if kind != "Button":
 		t.set_type_variation(kind, "Button")
-	var normal := box(bg, 99, lip_col, 1 if kind == "Button" else 0, 4, lip_col, 10)
-	normal.content_margin_left = 18
-	normal.content_margin_right = 18
-	var pressed := box(bg.darkened(0.06), 99, lip_col, 1 if kind == "Button" else 0, 1, lip_col, 10)
-	pressed.content_margin_left = 18
-	pressed.content_margin_right = 18
-	pressed.content_margin_top = 13
-	var disabled := normal.duplicate()
-	disabled.bg_color = Color(bg, 0.45)
-	disabled.border_color = Color(lip_col, 0.35)
+	var normal := kbox(colour, "button_rectangle_depth_flat", 8, 18)
+	var pressed := kbox(colour, "button_rectangle_flat", 8, 18)
+	pressed.content_margin_top = 12
+	var disabled := kbox(colour, "button_rectangle_depth_flat", 8, 18)
+	disabled.modulate_color = Color(1, 1, 1, 0.45)
 	t.set_stylebox("normal", kind, normal)
 	t.set_stylebox("hover", kind, normal)
 	t.set_stylebox("focus", kind, StyleBoxEmpty.new())
@@ -164,6 +331,7 @@ static func _button(t: Theme, kind: String, bg: Color, lip_col: Color, fg: Color
 	for c in ["icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_focus_color"]:
 		t.set_color(c, kind, fg)
 	t.set_font("font", kind, font)
+	t.set_font_size("font_size", kind, 15)
 	t.set_constant("h_separation", kind, 6)
 	t.set_constant("icon_max_width", kind, 22)
 
@@ -204,6 +372,7 @@ static func button(text: String, variation := "", icon_name := "", on_press: Cal
 		b.icon = art.icon(icon_name)
 		b.expand_icon = false
 	b.custom_minimum_size.y = 48
+	b.pressed.connect(click)
 	if on_press.is_valid():
 		b.pressed.connect(on_press)
 	return b
@@ -226,7 +395,8 @@ static func round_button(base: String, glyph: String, caption: String, on_press:
 	col.add_theme_constant_override("separation", 0)
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	var b := TextureButton.new()
-	b.texture_normal = art.badge(base)
+	b.texture_normal = load(KUI + COLOURS[base] + "/Default/button_round_depth_gloss.png") if COLOURS.has(base) else art.badge(base)
+	b.texture_pressed = load(KUI + COLOURS[base] + "/Default/button_round_gloss.png") if COLOURS.has(base) else null
 	b.ignore_texture_size = true
 	b.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
 	b.custom_minimum_size = Vector2(size, size)
@@ -247,6 +417,7 @@ static func round_button(base: String, glyph: String, caption: String, on_press:
 	b.button_down.connect(func(): b.self_modulate = Color(0.85, 0.85, 0.85); b.scale = Vector2(0.94, 0.94))
 	b.button_up.connect(func(): b.self_modulate = Color.WHITE; b.scale = Vector2.ONE)
 	b.resized.connect(func(): b.pivot_offset = b.size / 2)
+	b.pressed.connect(click)
 	if on_press.is_valid():
 		b.pressed.connect(on_press)
 	col.add_child(b)
@@ -296,6 +467,8 @@ static func counter(badge_name: String, min_width := 110, badge_size := 38) -> H
 	p.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var v := label("", "HudValue")
+	v.add_theme_font_override("font", number_font())
+	v.add_theme_font_size_override("font_size", 17)
 	p.add_child(v)
 	row.add_child(p)
 	row.set_meta("value", v)

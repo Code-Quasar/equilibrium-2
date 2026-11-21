@@ -31,6 +31,8 @@ var final_result: Variant = null
 var actions := {}            # action_id -> {kind, payload, label, status, error, sent_ms, done_ms}
 var draft_choice := {}       # {action_id, foundation} while a Foundation pick is pending
 var last_error := ""
+var view_ms := 0             # when the newest player_view arrived (diagnostics)
+var ack_avg_ms := -1.0       # average send → admission time (diagnostics)
 
 var _intent := {}            # what to do once the socket is ready
 var _rejoin_at := -1
@@ -234,6 +236,7 @@ func _on_message(m: Dictionary) -> void:
 			if not view.is_empty() and m.get("match_id") == view.get("match_id") and int(m.get("view_seq", 0)) < int(view.get("view_seq", 0)):
 				return  # an older snapshot arriving late
 			view = m
+			view_ms = Time.get_ticks_msec()
 			if phase in ["draft", "lobby", "connecting", "menu"] and str(m["public"].get("phase", "")) != "finished":
 				_set_phase("play")
 			if m.get("final_result") != null:
@@ -282,12 +285,16 @@ func _ack(m: Dictionary) -> void:
 	var a: Dictionary = actions[aid]
 	if a["status"] in ["applied", "rejected"]:
 		return  # never let a later message override an outcome
+	if not a.has("ack_ms"):
+		a["ack_ms"] = Time.get_ticks_msec()
+		var lat := float(a["ack_ms"] - int(a.get("sent_ms", a["ack_ms"])))
+		ack_avg_ms = lat if ack_avg_ms < 0 else lerpf(ack_avg_ms, lat, 0.25)
 	if status == "queued" and phase_name == "admission":
 		a["status"] = "queued"
 	elif status == "applied":
+		# Shown in the action list; no toast, to keep the screen calm.
 		a["status"] = "applied"
 		a["done_ms"] = Time.get_ticks_msec()
-		notice.emit("%s ✓" % a["label"], "good")
 	else:
 		a["status"] = "rejected"
 		a["error"] = status

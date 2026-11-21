@@ -28,6 +28,7 @@ const BUBBLES := {
 var art: Art
 var session: Session
 var toast: Callable
+var open_settings: Callable = func(): pass
 
 var map: CityMap                  # the world map; App owns it, this screen drives it
 var placing := {}                 # {type, at, ok, why}: a building being dragged into place
@@ -48,14 +49,26 @@ var _drawer_cards := {}           # building type -> {button, price}
 var _activity: VBoxContainer
 var _banner: PanelContainer
 var _blockers: Array[Control] = []
-var _smile: Label
-var _pop: Control
+var _gauge: Gauge
+var _pop_card: HudCard
 var _rank_label: Label
-var _need_chips := {}
-var _cash: Control
-var _mats: Control
-var _timer: Control
+var _need_chips := {}             # need key -> HudCard
+var _cash: HudCard
+var _mats: HudCard
+var _timer: HudCard
 var _net: Label
+var _diag: Label
+var _popover: Control
+var _safe: Array = [0, 0, 0, 0]
+var visiting := -1                # a rival's city_id while visiting it, read-only
+var _own_controls: Array[Control] = []
+var _visit_bar: PanelContainer
+var _visit_label: Label
+var _alerts: VBoxContainer
+var _alert_seen := {}             # category -> building ids already announced
+var _alert_dismissed := {}        # category -> true while the player has closed it
+var _hist: Array = []             # [tick, money, population, materials] per received tick
+var _zoom: Control
 var _last_pop := -1
 var _pop_delta := 0
 
@@ -63,13 +76,31 @@ var _pop_delta := 0
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_safe = UI.safe_margins(self)
 	_build()
+	# Side panels and bars follow the same safe area.
+	for c in [_panel, _modebar]:
+		c.offset_right -= _safe[2]
+		c.offset_left -= _safe[2]
+		c.offset_top += _safe[1]
+	_panel.offset_bottom -= _safe[3]
+	_drawer.offset_left += _safe[0]
+	_drawer.offset_right -= _safe[2]
+	_drawer.offset_bottom -= _safe[3]
+	_zoom.offset_left -= _safe[2]
+	_zoom.offset_right -= _safe[2]
+	_alerts.offset_left += _safe[0]
+	_alerts.offset_top += _safe[1]
+	_activity.offset_left += _safe[0]
 
 
 func _corner(preset: int, x: float, y: float, child: Control) -> Control:
 	child.set_anchors_preset(preset)
 	var right := preset in [Control.PRESET_TOP_RIGHT, Control.PRESET_BOTTOM_RIGHT]
 	var bottom := preset in [Control.PRESET_BOTTOM_LEFT, Control.PRESET_BOTTOM_RIGHT]
+	# Keep clear of notches, rounded corners and system bars.
+	x += float(_safe[2] if right else _safe[0])
+	y += float(_safe[3] if bottom else _safe[1])
 	child.grow_horizontal = Control.GROW_DIRECTION_BEGIN if right else Control.GROW_DIRECTION_END
 	child.grow_vertical = Control.GROW_DIRECTION_BEGIN if bottom else Control.GROW_DIRECTION_END
 	child.offset_left = -x if right else x
@@ -87,64 +118,68 @@ func _build() -> void:
 	map.ghost_dropped.connect(_on_ghost_drop)
 	map.ui_blocks = blocks
 
-	# Top left: Satisfaction, residents and rank, then what the city needs.
+	# Top left: the Satisfaction gauge, residents and rank, then what the
+	# city has against what it needs. Tap a figure for a hint, hold it (or
+	# right click) for the details.
 	var tl := UI.vbox(6)
-	var row := UI.hbox(10)
-	var smile := PanelContainer.new()
-	smile.add_theme_stylebox_override("panel", UI.box(Color("#2fb27a"), 40, Color.WHITE, 3, 0, Color(), 6))
-	smile.custom_minimum_size = Vector2(72, 72)
-	_smile = UI.label("", "HudValue")
-	_smile.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_smile.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_smile.add_theme_font_size_override("font_size", 20)
-	smile.add_child(_smile)
-	row.add_child(smile)
-	var who := UI.vbox(4)
-	_pop = UI.counter("people", 130, 34)
-	who.add_child(_pop)
+	var row := UI.hbox(8)
+	_gauge = Gauge.new()
+	_gauge.tapped.connect(func(): toast.call("Satisfaction draws residents: homes, jobs, services, power and a clean environment raise it.", "info"))
+	_gauge.held.connect(func(): _details("satisfaction", _gauge))
+	row.add_child(_gauge)
+	var who := UI.vbox(6)
+	who.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_pop_card = HudCard.new("people", "Residents", true)
+	_pop_card.tapped.connect(func(): toast.call("Residents are the score: the most residents at the end wins.", "info"))
+	_pop_card.held.connect(func(): _details("population", _pop_card))
+	who.add_child(_pop_card)
 	_rank_label = UI.label("", "HudSmall")
 	who.add_child(_rank_label)
 	row.add_child(who)
 	tl.add_child(row)
 	var needs := UI.hbox(6)
 	for n in NEEDS:
-		var chip := Button.new()
-		chip.add_theme_stylebox_override("normal", UI.box(Color(0.06, 0.11, 0.16, 0.82), 12, Color(), 0, 0, Color(), 4))
-		chip.add_theme_stylebox_override("hover", UI.box(Color(0.06, 0.11, 0.16, 0.9), 12, Color(), 0, 0, Color(), 4))
-		chip.add_theme_stylebox_override("pressed", UI.box(Color(0.12, 0.2, 0.26, 0.95), 12, Color(), 0, 0, Color(), 4))
-		chip.custom_minimum_size = Vector2(74, 52)
-		var col := UI.vbox(0)
-		col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		var b := UI.badge(n[1], 24)
-		b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		b.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		col.add_child(b)
-		var l := UI.label("", "HudSmall")
-		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		col.add_child(l)
-		chip.add_child(col)
+		var card := HudCard.new(n[1], n[2])
 		var hint: String = n[3]
-		chip.pressed.connect(func(): toast.call(hint, "info"))
-		needs.add_child(chip)
-		_need_chips[n[0]] = l
+		var key: String = n[0]
+		card.tapped.connect(func(): toast.call(hint, "info"))
+		card.held.connect(func(): _details(key, card))
+		needs.add_child(card)
+		_need_chips[key] = card
 	tl.add_child(needs)
 	_blockers.append(_corner(Control.PRESET_TOP_LEFT, 10, 8, tl))
 
-	# Top right: money, materials, time left, connection.
-	var tr := UI.hbox(16)
-	_cash = UI.counter("coin", 110)
-	_mats = UI.counter("materials", 90)
-	_timer = UI.counter("timer", 86)
+	# Top right: money first, then materials and the clock.
+	var tr := UI.hbox(8)
+	_cash = HudCard.new("coin", "Cash", true)
+	_cash.tapped.connect(func(): toast.call("Cash pays for construction, upkeep and trade.", "info"))
+	_cash.held.connect(func(): _details("money", _cash))
+	_mats = HudCard.new("materials", "Materials", true)
+	_mats.custom_minimum_size.x = 112
+	_mats.tapped.connect(func(): toast.call("Recovered materials lower construction costs. Recycling makes them.", "info"))
+	_mats.held.connect(func(): _details("materials", _mats))
+	_timer = HudCard.new("timer", "Time left", true)
+	_timer.custom_minimum_size.x = 112
+	_timer.tapped.connect(func(): toast.call("The match lasts 20 minutes. Crises are announced a minute ahead.", "info"))
+	_timer.held.connect(func(): _details("time", _timer))
 	tr.add_child(_cash)
 	tr.add_child(_mats)
 	tr.add_child(_timer)
-	var right := UI.vbox(2, [tr])
+	var right := UI.vbox(4, [tr])
 	_net = UI.label("", "HudCaption")
 	_net.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	right.add_child(_net)
-	_blockers.append(_corner(Control.PRESET_TOP_RIGHT, 12, 10, right))
+	_blockers.append(_corner(Control.PRESET_TOP_RIGHT, 12, 8, right))
+	_diag = UI.label("", "HudCaption")
+	_diag.add_theme_font_override("font", UI.number_font())
+	_diag.add_theme_font_size_override("font_size", 11)
+	_diag.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_diag.offset_left = 14
+	_diag.offset_top = -112
+	_diag.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_diag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_diag.visible = false
+	add_child(_diag)
 
 	# Coming crisis, top middle.
 	_banner = PanelContainer.new()
@@ -155,18 +190,56 @@ func _build() -> void:
 	_banner.visible = false
 	add_child(_banner)
 
+	# Right edge: zoom and back-to-city, for any mouse, touchpad or finger.
+	var zoom := UI.vbox(8)
+	zoom.add_child(UI.round_button("btn_blue", "plus", "", func(): map.zoom_by(1.25), 46))
+	zoom.add_child(UI.round_button("btn_blue", "minus", "", func(): map.zoom_by(0.8), 46))
+	zoom.add_child(UI.round_button("btn_blue", "center", "", func(): map.recenter(), 46))
+	zoom.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+	zoom.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	zoom.grow_vertical = Control.GROW_DIRECTION_BOTH
+	zoom.offset_left = -60
+	zoom.offset_right = -12
+	zoom.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(zoom)
+	_blockers.append(zoom)
+	_zoom = zoom
+
 	# Bottom left: trade, rivals, waste policy.
 	var bl := UI.hbox(12)
 	bl.add_child(UI.round_button("btn_blue", "trade", "Trade", func(): _open("market")))
 	bl.add_child(UI.round_button("btn_blue", "region", "Rivals", func(): _open("rivals")))
 	bl.add_child(UI.round_button("btn_green", "waste", "Policy", func(): _open("policy")))
+	bl.add_child(UI.round_button("btn_purple", "settings", "Settings", func(): _open(""); open_settings.call()))
 	_blockers.append(_corner(Control.PRESET_BOTTOM_LEFT, 14, 10, bl))
+	_own_controls.append(bl)
 
 	# Bottom right: roads and the build bar.
 	var br := UI.hbox(12)
 	br.add_child(UI.round_button("btn_orange", "road", "Roads", func(): _open(""); road_mode("draw")))
 	br.add_child(UI.round_button("btn_green", "plus", "Build", func(): _open("" if tab == "build" else "build"), 72))
 	_blockers.append(_corner(Control.PRESET_BOTTOM_RIGHT, 14, 10, br))
+	_own_controls.append(br)
+
+	# Visiting a rival: who it is, and the way home.
+	_visit_bar = PanelContainer.new()
+	_visit_bar.add_theme_stylebox_override("panel", UI.box(Color(0.05, 0.09, 0.12, 0.9), 18, Color("#ffd257"), 1, 0, Color(), 10))
+	_visit_bar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_visit_bar.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_visit_bar.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_visit_bar.offset_top = -16
+	_visit_bar.offset_bottom = -16
+	_visit_bar.visible = false
+	var vb := UI.hbox(14)
+	_visit_label = UI.label("", "OnDark")
+	_visit_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	vb.add_child(_visit_label)
+	var home := UI.button("Return to My City", "PrimaryButton", "play", func(): visit(-1))
+	home.custom_minimum_size.y = 46
+	vb.add_child(home)
+	_visit_bar.add_child(vb)
+	add_child(_visit_bar)
+	_blockers.append(_visit_bar)
 
 	# The build bar: every building in a row; drag one up onto the map.
 	var scroll := ScrollContainer.new()
@@ -210,7 +283,7 @@ func _build() -> void:
 	_panel.anchor_bottom = 1
 	_panel.offset_left = -400
 	_panel.offset_right = -8
-	_panel.offset_top = 92
+	_panel.offset_top = 156
 	_panel.offset_bottom = -96
 	_panel.visible = false
 	add_child(_panel)
@@ -223,28 +296,39 @@ func _build() -> void:
 	_modebar.anchor_right = 1
 	_modebar.offset_left = -400
 	_modebar.offset_right = -8
-	_modebar.offset_top = 92
+	_modebar.offset_top = 156
 	_modebar.visible = false
 	add_child(_modebar)
 	_blockers.append(_modebar)
 
-	# Recent actions and their receipts.
+	# Recent actions and their receipts, above the bottom-left buttons.
 	_activity = UI.vbox(4)
-	_activity.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+	_activity.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_activity.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_activity.offset_left = 12
-	_activity.offset_top = 40
+	_activity.offset_top = -100
+	_activity.offset_bottom = -100
 	_activity.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_activity)
+
+	# What real buildings are missing, one card per problem, under the HUD.
+	_alerts = UI.vbox(6)
+	_alerts.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_alerts.offset_left = 10
+	_alerts.offset_top = 160
+	_alerts.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_alerts)
+	_blockers.append(_alerts)
 
 
 func _drawer_card(t: String) -> Control:
 	var box := UI.vbox(2)
 	box.custom_minimum_size = Vector2(132, 0)
 	var thumb := TextureRect.new()
-	thumb.texture = art.sprite(Catalogue.sprite(t, 1))
+	thumb.texture = UI.thumbs.get_thumb(t, 1)
 	thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	thumb.custom_minimum_size = Vector2(120, 70)
+	thumb.custom_minimum_size = Vector2(120, 80)
 	box.add_child(thumb)
 	var name := UI.label(Catalogue.building_name(t), "Small", true)
 	name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -304,6 +388,11 @@ func _open(key: String) -> void:
 
 ## Back button: closes whatever is open, one layer at a time.
 func close_panel() -> bool:
+	if close_details():
+		return true
+	if visiting >= 0:
+		visit(-1)
+		return true
 	if map.road_mode != "":
 		road_mode("")
 		refresh("all")
@@ -323,6 +412,8 @@ func close_panel() -> bool:
 
 
 func _on_tile(t: int) -> void:
+	if visiting >= 0:
+		return
 	if map.road_mode != "":
 		return
 	if not placing.is_empty():
@@ -366,9 +457,16 @@ func refresh(what: String) -> void:
 	_track_population()
 	_hud_refresh()
 	_settle_reservations()
-	map.selected = selected
 	map.stale = not session.live
+	if visiting >= 0:
+		_visit_refresh()
+		_banner_refresh()
+		if tab == "rivals" and what == "view":
+			_panel_refresh()
+		return
+	map.selected = selected
 	map.needs = _building_needs()
+	_alerts_refresh(map.needs)
 	if not _card_dragging and not map.is_dragging_ghost():
 		map.show_city(own(), tick(), str(v().get("match_id", "")) + ":" + str(session.seat), _reserved)
 	_enforce_roads()
@@ -386,17 +484,23 @@ func refresh(what: String) -> void:
 
 func _hud_refresh() -> void:
 	var o := own()
+	var t := tick()
+	if _hist.is_empty() or int(_hist[-1][0]) != t:
+		_hist.append([t, int(o.get("money_micro", 0)), int(o.get("population", 0)), int(o.get("materials_micro", 0))])
+		if _hist.size() > 90:
+			_hist.pop_front()
 	var sat := float(o.get("satisfaction_micro", 0) if o.get("satisfaction_micro") != null else 0) / Catalogue.MICRO
-	_smile.text = "%d%%" % int(round(sat))
-	(_smile.get_parent() as PanelContainer).add_theme_stylebox_override("panel", UI.box(Color("#2fb27a") if sat >= 75 else (Color("#f29a3d") if sat >= 55 else Color("#e85d4a")), 40, Color.WHITE, 3, 0, Color(), 6))
-	UI.set_counter(_pop, "%s%s" % [Catalogue.fmt(o.get("population", 0)), ("  %+d" % _pop_delta) if _pop_delta != 0 else ""])
-	_rank_label.text = "   #%d of 4 cities" % _rank()
-	UI.set_counter(_cash, Catalogue.micro(o.get("available_money_micro", 0)))
-	UI.set_counter(_mats, Catalogue.micro(o.get("materials_micro", 0)))
-	var left := int(v().get("public", {}).get("duration_ticks", 1200)) - tick()
-	UI.set_counter(_timer, Catalogue.clock(left), Color("#ff8a78") if left <= 60 else Color.WHITE)
-	_net.text = ("● live %d ms" % int(maxf(session.link.rtt_avg_ms, 0))) if session.live else "● reconnecting…"
-	_net.add_theme_color_override("font_color", Color("#69e0b4") if session.live else Color("#f28a72"))
+	_gauge.value = sat
+	_pop_card.set_value("%s%s" % [Catalogue.fmt(o.get("population", 0)), ("  %+d" % _pop_delta) if _pop_delta != 0 else ""])
+	_rank_label.text = "   Rank #%d of 4" % _rank()
+	var net := _per_minute(1)
+	_cash.set_value(Catalogue.micro(o.get("available_money_micro", 0)), "bad" if net < 0 and float(o.get("available_money_micro", 0)) < -net * Catalogue.MICRO else "")
+	_mats.set_value(Catalogue.micro(o.get("materials_micro", 0)))
+	var left := int(v().get("public", {}).get("duration_ticks", 1200)) - t
+	_timer.set_value(Catalogue.clock(left), "bad" if left <= 60 else "")
+	_net.text = "" if session.live else "● reconnecting…"
+	_net.add_theme_color_override("font_color", Color("#f28a72"))
+	_diag_refresh()
 	# What the city has against what it needs. Homes and services count in full
 	# at 115 % of residents, as in Satisfaction.
 	var cap: Dictionary = o.get("capacity", {})
@@ -415,16 +519,284 @@ func _hud_refresh() -> void:
 	for k in rows:
 		var have: float = rows[k][0]
 		var need: float = rows[k][1]
-		_chip(k, "%s/%s" % [UI.compact(have), UI.compact(need)], have >= need * 0.999)
-	_chip("waste", UI.compact(street), street < 1.0)
+		var st := "ok" if have >= need * 0.999 else ("warn" if have >= need * 0.85 else "bad")
+		_need_chips[k].set_value("%s/%s" % [UI.compact(have), UI.compact(need)], st)
+	_need_chips["waste"].set_value(UI.compact(street), "ok" if street < 1.0 else ("warn" if street < 20.0 else "bad"))
 	var env := float(o.get("environment_micro", 0)) / Catalogue.MICRO
-	_chip("air", "%d%%" % int(round(env)), env >= 70.0)
+	_need_chips["air"].set_value("%d%%" % int(round(env)), "ok" if env >= 70.0 else ("warn" if env >= 50.0 else "bad"))
+	if _popover and is_instance_valid(_popover) and _popover.visible:
+		_details(str(_popover.get_meta("key")), null)
 
 
-func _chip(key: String, text: String, ok: bool) -> void:
-	var l: Label = _need_chips[key]
-	l.text = text
-	l.add_theme_color_override("font_color", Color.WHITE if ok else Color("#ff8a78"))
+## The change of a tracked figure per minute, from the snapshots received
+## over the last minute (index: 1 money, 2 population, 3 materials).
+func _per_minute(i: int) -> float:
+	if _hist.size() < 2:
+		return 0.0
+	var last: Array = _hist[-1]
+	var first: Array = _hist[0]
+	for h in _hist:
+		if int(last[0]) - int(h[0]) <= 60:
+			first = h
+			break
+	var dt := float(int(last[0]) - int(first[0]))
+	if dt <= 0:
+		return 0.0
+	return float(int(last[i]) - int(first[i])) / dt * 60.0 / (Catalogue.MICRO if i != 2 else 1.0)
+
+
+func _diag_refresh() -> void:
+	_diag.visible = Settings.diagnostics
+	if not Settings.diagnostics:
+		return
+	var l := session.link
+	var age := (Time.get_ticks_msec() - session.view_ms) if session.view_ms > 0 else -1
+	_diag.text = "DEV · net\nrtt %d ms  avg %d  jitter %d\nack %s  view age %s  seq %d" % [
+		int(l.rtt_ms), int(l.rtt_avg_ms), int(l.jitter_ms),
+		("%d ms" % int(session.ack_avg_ms)) if session.ack_avg_ms >= 0 else "–",
+		("%d ms" % age) if age >= 0 else "–", int(v().get("view_seq", 0))]
+
+
+## A popover of authoritative figures behind a HUD card. Opens under the
+## card; tapping elsewhere closes it. Refreshed with each new view.
+func _details(key: String, anchor: Control) -> void:
+	if _popover == null or not is_instance_valid(_popover):
+		_popover = PanelContainer.new()
+		_popover.add_theme_stylebox_override("panel", UI.box(Color("#14222c"), 16, Color(1, 1, 1, 0.16), 1, 0, Color(), 14))
+		_popover.mouse_filter = Control.MOUSE_FILTER_STOP
+		_popover.z_index = 15
+		add_child(_popover)
+	if anchor != null:
+		UI.click()
+		_popover.set_meta("anchor", anchor)
+	_popover.set_meta("key", key)
+	UI.clear(_popover)
+	var col := UI.vbox(4)
+	_popover.add_child(col)
+	var rows := _detail_rows(key)
+	var title := UI.label(str(rows[0]), "OnDarkTitle")
+	title.add_theme_font_size_override("font_size", 15)
+	col.add_child(title)
+	for r in rows.slice(1):
+		if r is String:
+			var l := UI.label(r, "OnDarkCaption", true)
+			l.custom_minimum_size.x = 240
+			col.add_child(l)
+			continue
+		var line := UI.hbox(14)
+		var k := UI.label(str(r[0]), "OnDarkCaption")
+		k.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		line.add_child(k)
+		var val := UI.label(str(r[1]), "OnDark")
+		val.add_theme_font_override("font", UI.number_font())
+		val.add_theme_font_size_override("font_size", 14)
+		if r.size() > 2:
+			val.add_theme_color_override("font_color", r[2])
+		line.add_child(val)
+		col.add_child(line)
+	_popover.visible = true
+	_popover.reset_size()
+	var a: Control = _popover.get_meta("anchor")
+	if a and is_instance_valid(a):
+		var ar := a.get_global_rect()
+		var vp := get_viewport_rect().size
+		var sz := _popover.get_combined_minimum_size()
+		_popover.position = Vector2(clampf(ar.position.x, 8, vp.x - sz.x - 8), clampf(ar.end.y + 6, 8, vp.y - sz.y - 8))
+
+
+func close_details() -> bool:
+	if _popover and is_instance_valid(_popover) and _popover.visible:
+		_popover.visible = false
+		return true
+	return false
+
+
+func _detail_rows(key: String) -> Array:
+	var o := own()
+	var M := Catalogue.MICRO
+	var cap: Dictionary = o.get("capacity", {})
+	var e: Dictionary = o.get("electricity", {})
+	var pop := float(o.get("population", 0))
+	var good := Color("#69e0b4")
+	var bad := Color("#ff9c8a")
+	var sg := func(x: float, unit := "") -> Array:
+		return ["%s%s%s" % ["+" if x > 0 else "", Catalogue.fmt(x) if absf(x) >= 10 else "%.1f" % x, unit], good if x > 0 else (bad if x < 0 else Color.WHITE)]
+	match key:
+		"satisfaction":
+			var c: Dictionary = o.get("satisfaction_components_micro", {})
+			var out: Array = ["Satisfaction %s" % Catalogue.micro(o.get("satisfaction_micro", 0), 1)]
+			for part in [["housing", "Homes"], ["employment", "Jobs"], ["services", "Services"], ["power", "Power"], ["environment", "Environment"]]:
+				if c.has(part[0]):
+					out.append([part[1], Catalogue.micro(c[part[0]], 1)])
+			out.append("Residents move toward the most satisfying cities.")
+			return out
+		"population":
+			var d: Array = sg.call(_per_minute(2), " / min")
+			var mig: Dictionary = Catalogue.data().get("migration", {})
+			var first := int(mig.get("first", 80))
+			var every := int(mig.get("interval", 20))
+			var t := tick()
+			var next := first - t if t < first else every - ((t - first) % every)
+			return ["Residents", ["Now", Catalogue.fmt(pop)], ["Change", d[0], d[1]], ["Homes", Catalogue.fmt(float(cap.get("housing", 0)))],
+				["Rank", "#%d of 4" % _rank()], ["Next move of residents", "%d s" % next]]
+		"homes":
+			return ["Homes", ["Housing capacity", Catalogue.fmt(float(cap.get("housing", 0)))], ["Residents", Catalogue.fmt(pop)],
+				["Full comfort at 115 %%", Catalogue.fmt(pop * 1.15)], "Build Residential Districts to house more people."]
+		"jobs":
+			return ["Jobs", ["Jobs offered", Catalogue.fmt(float(cap.get("potential_jobs", 0)))], ["Jobs filled", Catalogue.micro(cap.get("realized_jobs_micro", 0))],
+				["Staffing", "%s %%" % Catalogue.micro(int(cap.get("staffing_micro", 0)) * 100, 0)], ["Residents", Catalogue.fmt(pop)]]
+		"power":
+			var rows: Array = ["Electricity"]
+			for f in [["supply", "Supply"], ["demand", "Demand"], ["delivered", "Delivered"], ["shortage", "Shortage"], ["imports", "Bought"], ["exports", "Sold"], ["municipal_delivered", "From the grid"], ["biogas_available", "From biogas"]]:
+				if e.has(f[0]):
+					rows.append([f[1], Catalogue.micro(e[f[0]], 1), bad if f[0] == "shortage" and int(e[f[0]]) > 0 else Color.WHITE])
+			return rows
+		"services":
+			return ["Services", ["Service capacity", Catalogue.micro(cap.get("services_micro", 0))], ["Needed (115 %% of residents)", Catalogue.fmt(pop * 1.15)],
+				"Public Services Centers add capacity."]
+		"waste":
+			var u: Array = o.get("uncollected_micro", [])
+			var so: Array = o.get("sorted_micro", [])
+			var wt: Dictionary = o.get("waste_totals", {})
+			var rows2: Array = ["Waste"]
+			for i in 3:
+				rows2.append(["On the street · %s" % Catalogue.WASTE[i], Catalogue.micro(u[i] if i < u.size() else 0, 1)])
+			for i in 3:
+				rows2.append(["Sorted · %s" % Catalogue.WASTE[i], Catalogue.micro(so[i] if i < so.size() else 0, 1)])
+			rows2.append(["Collected so far", Catalogue.micro(wt.get("collected", 0))])
+			rows2.append(["Recycled so far", Catalogue.micro(wt.get("recycled", 0))])
+			rows2.append(["Organics treated", Catalogue.micro(wt.get("organic_processed", 0))])
+			rows2.append(["Sent to landfill", Catalogue.micro(o.get("disposed_micro", 0))])
+			return rows2
+		"air":
+			return ["Environment", ["Environment", Catalogue.micro(o.get("environment_micro", 0), 1)], ["Air", Catalogue.micro(o.get("air_micro", 0), 1)],
+				["Air with policy and events", Catalogue.micro(o.get("effective_air_micro", 0), 1)], ["Landfill damage", Catalogue.micro(o.get("landfill_damage_micro", 0), 1)]]
+		"money":
+			var n: Array = sg.call(_per_minute(1), " / min")
+			return ["Cash", ["Available", Catalogue.micro(o.get("available_money_micro", 0))], ["Balance", Catalogue.micro(o.get("money_micro", 0))],
+				["Net over the last minute", n[0], n[1]], "Net change is measured between the updates the server sent."]
+		"materials":
+			var m: Array = sg.call(_per_minute(3), " / min")
+			return ["Materials", ["In stock", Catalogue.micro(o.get("materials_micro", 0))], ["Recovered so far", Catalogue.micro(o.get("recovered_micro", 0))],
+				["Spent so far", Catalogue.micro(o.get("materials_spent_micro", 0))], ["Change", m[0], m[1]]]
+		"time":
+			var ev: Dictionary = v().get("public", {}).get("events", {})
+			var rows3: Array = ["Match clock", ["Elapsed", Catalogue.clock(tick())], ["Left", Catalogue.clock(int(v().get("public", {}).get("duration_ticks", 1200)) - tick())]]
+			for id in ev.get("active", []):
+				rows3.append(["Now", Catalogue.EVENTS.get(id, [id])[0], bad])
+			for id in ev.get("warnings", []):
+				rows3.append(["Coming", Catalogue.EVENTS.get(id, [id])[0], Color("#ffd257")])
+			for x in Catalogue.data().get("events", []):
+				if int(x["start"]) > tick():
+					rows3.append(["Next crisis", "%s at %s" % [Catalogue.EVENTS.get(x["id"], [x["id"]])[0], Catalogue.clock(int(x["start"]))]])
+					break
+			return rows3
+	return [key]
+
+
+## Building notifications, from the same per-building problems the bubbles
+## show: one card per kind of problem naming the buildings it affects. A card
+## appears once when a problem starts (with a gold flash on the HUD figure it
+## concerns), stays while it lasts unless tapped away, and goes when it ends.
+const ALERTS := {
+	"road": ["warning", "Not connected to a road", ""],
+	"off": ["warning", "Switched off", ""],
+	"coin": ["coin", "Not enough money to run", "money"],
+	"power": ["power", "Not enough electricity", "power"],
+	"people": ["people", "Not enough workers", "population"],
+	"waste": ["waste", "Waste is not being collected", "waste"],
+}
+
+
+func _alerts_refresh(needs: Dictionary) -> void:
+	var by_kind := {}
+	for t in needs:
+		var b := _building_at(int(t))
+		if b.is_empty():
+			continue
+		by_kind.get_or_add(str(needs[t]), []).append(b)
+	# Problems that ended: forget them so they can be announced again later.
+	for k in _alert_seen.keys():
+		if not by_kind.has(k):
+			_alert_seen.erase(k)
+			_alert_dismissed.erase(k)
+	UI.clear(_alerts)
+	var shown := 0
+	for k in by_kind:
+		var list: Array = by_kind[k]
+		var ids := {}
+		for b in list:
+			ids[int(b["id"])] = true
+		var before: Dictionary = _alert_seen.get(k, {})
+		var fresh := false
+		for id in ids:
+			if not before.has(id):
+				fresh = true
+		_alert_seen[k] = ids
+		if fresh:
+			_alert_dismissed.erase(k)
+			if UI.music:
+				UI.music.alert("notice")
+			_flash(str(ALERTS.get(k, ["", "", ""])[2]))
+		if _alert_dismissed.has(k) or shown >= 3:
+			continue
+		shown += 1
+		_alerts.add_child(_alert_card(k, list))
+
+
+func _alert_card(kind: String, list: Array) -> Control:
+	var meta: Array = ALERTS.get(kind, ["warning", kind, ""])
+	var names := []
+	for b in list.slice(0, 2):
+		names.append(Catalogue.building_name(str(b["type"])))
+	var who := ", ".join(names) + ("" if list.size() <= 2 else " and %d more" % (list.size() - 2))
+	var p := PanelContainer.new()
+	p.add_theme_stylebox_override("panel", UI.box(Color(0.06, 0.09, 0.12, 0.88), 12, Color("#ffb648") if kind != "road" else Color("#ff7a66"), 1, 0, Color(), 7))
+	p.mouse_filter = Control.MOUSE_FILTER_STOP
+	p.custom_minimum_size.x = 250
+	var row := UI.hbox(8)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var badge := UI.badge(str(meta[0]), 24)
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(badge)
+	var col := UI.vbox(0)
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var a := UI.label(str(meta[1]), "HudSmall")
+	a.add_theme_constant_override("outline_size", 0)
+	var b2 := UI.label(who, "HudCaption")
+	b2.add_theme_constant_override("outline_size", 0)
+	b2.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
+	for l in [a, b2]:
+		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		col.add_child(l)
+	row.add_child(col)
+	var x := UI.label("✕", "HudCaption")
+	x.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	x.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	x.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(x)
+	p.add_child(row)
+	p.gui_input.connect(func(e: InputEvent):
+		if e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_LEFT and not e.pressed:
+			UI.click()
+			_alert_dismissed[kind] = true
+			p.queue_free()
+			accept_event())
+	return p
+
+
+## A short gold flash on the HUD figure a notification concerns.
+func _flash(target: String) -> void:
+	match target:
+		"money":
+			_cash.pulse()
+		"population":
+			_pop_card.pulse()
+		"":
+			pass
+		_:
+			if _need_chips.has(target):
+				_need_chips[target].pulse()
 
 
 ## What each building is missing, from the authoritative view and the road
@@ -560,7 +932,7 @@ func _policy_panel() -> void:
 	var pdata: Dictionary = Catalogue.data().get("policy", {})
 	var box := UI.vbox(8)
 	box.add_child(UI.label("ON" if on else "OFF", "Display"))
-	box.add_child(UI.label("Homes make 25 % less waste and businesses 10 % less. Costs %s a minute and a little business income." % Catalogue.micro(pdata.get("policy_fee_micro_per_minute", 0)), "Caption", true))
+	box.add_child(UI.label("Homes make 25 %% less waste and businesses 10 %% less. Costs %s a minute and a little business income." % Catalogue.micro(pdata.get("policy_fee_micro_per_minute", 0)), "Caption", true))
 	var cool := int(o.get("policy_change_at", 0)) - tick()
 	var pb := UI.button("Turn %s" % ("off" if on else "on"), "PrimaryButton", "", func(): session.act("set_reduce_waste", {"enabled": not on}, "Reduce Waste %s" % ("off" if on else "on")))
 	if cool > 0:
@@ -675,6 +1047,11 @@ func _card_input(event: InputEvent, type: String, enabled: bool) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	# A press anywhere outside the details popover closes it.
+	if event is InputEventMouseButton and event.pressed and _popover and is_instance_valid(_popover) and _popover.visible:
+		var a: Variant = _popover.get_meta("anchor", null)
+		if not _popover.get_global_rect().has_point(event.global_position) and not (a is Control and is_instance_valid(a) and (a as Control).get_global_rect().has_point(event.global_position)):
+			_popover.visible = false
 	if not _card_dragging:
 		if event is InputEventMouseButton and not event.pressed:
 			_card_drag = {}
@@ -739,6 +1116,8 @@ func _modebar_refresh() -> void:
 	var roads := map.road_mode != ""
 	_modebar.visible = not placing.is_empty() or roads
 	_panel.visible = not _modebar.visible and tab in PANELS
+	if _zoom:
+		_zoom.visible = not _modebar.visible and tab not in PANELS
 	_drawer.visible = not _modebar.visible and tab == "build"
 	if roads:
 		var box := UI.vbox(6)
@@ -900,12 +1279,72 @@ func _rivals_panel() -> void:
 		box.add_child(UI.hbox(8, [UI.label("#%d %s" % [int(r["rank"]), "Your city" if cid == session.seat else "City %d" % (cid + 1)], "Value"), UI.spacer(), UI.label("%s residents" % Catalogue.fmt(r["population"]), "Value")]))
 		box.add_child(UI.bar(float(r["population"]) / maxf(total, 1) * 2.0, UI.PEOPLE if cid != session.seat else UI.PRIMARY))
 		box.add_child(UI.label("%s · Satisfaction %s · Environment %s · Development %s" % [f, Catalogue.micro(r.get("satisfaction_micro", 0), 1), Catalogue.micro(r.get("environment_micro", 0), 1), Catalogue.micro(r.get("development_micro", 0))], "Small", true))
+		if cid != session.seat:
+			var c2 := cid
+			var vb := UI.button("Return to My City" if visiting == cid else "Visit city", "SoftButton" if visiting == cid else "", "region", func(): visit(-1 if visiting == c2 else c2))
+			box.add_child(vb)
 		_card(box)
 	var mig: Dictionary = Catalogue.data().get("migration", {})
 	var first := int(mig.get("first", 80))
 	var every := int(mig.get("interval", 20))
 	var next := first if tick() < first else first + ((tick() - first) / every + 1) * every
 	_card(UI.label("Residents move toward the most satisfying city every %d s. Next move in %s." % [every, Catalogue.clock(next - tick())], "Caption", true))
+
+
+## Looks at a rival's city, read-only, from the public part of the view:
+## its buildings, their level and whether they are finished. Its roads are
+## not shared, so the buildings are arranged along the main road. visit(-1)
+## returns home.
+func visit(city_id: int) -> void:
+	if city_id == visiting:
+		return
+	if city_id >= 0 and _rival(city_id).is_empty():
+		toast.call("That city is not in the latest update", "warn")
+		return
+	if visiting < 0:
+		_cancel_place()
+		road_mode("")
+	visiting = city_id
+	selected = -1
+	map.selected = -1
+	map.read_only = visiting >= 0
+	map.needs = {}
+	for c in _own_controls:
+		c.visible = visiting < 0
+	_alerts.visible = visiting < 0
+	_activity.visible = visiting < 0
+	_visit_bar.visible = visiting >= 0
+	if tab != "rivals":
+		_open("")
+	if visiting < 0:
+		refresh("all")
+		map.recenter()
+		return
+	_visit_refresh()
+	map.recenter()
+	UI.click()
+
+
+func _rival(city_id: int) -> Dictionary:
+	for o in v().get("opponents", []):
+		if int(o["city_id"]) == city_id:
+			return o
+	return {}
+
+
+func _visit_refresh() -> void:
+	var o := _rival(visiting)
+	if o.is_empty():
+		visit(-1)
+		return
+	var f: String = Catalogue.FOUNDATIONS.get(str(o.get("foundation", "")), ["No Foundation"])[0]
+	_visit_label.text = "Visiting City %d · %s · %s residents · view only" % [visiting + 1, f, Catalogue.fmt(float(o.get("population", 0)))]
+	var bs := []
+	for b in o.get("buildings", []):
+		bs.append({"id": 100000 + int(b["tile"]), "tile": int(b["tile"]), "type": str(b["type"]), "level": int(b.get("level", 1)),
+			"status": str(b.get("status", "complete")), "operational": true, "visitor": true})
+	var city := {"buildings": bs, "population": o.get("population", 0), "projects": []}
+	map.show_city(city, tick(), "visit:%s:%d" % [str(v().get("match_id", "")), visiting])
 
 
 func _building_at(t: int) -> Dictionary:
@@ -934,7 +1373,7 @@ func _track_population() -> void:
 	var p := int(own().get("population", 0))
 	if _last_pop >= 0 and p != _last_pop:
 		_pop_delta = p - _last_pop
-		toast.call("%s%d residents (now %d)" % ["+" if _pop_delta > 0 else "", _pop_delta, p], "good" if _pop_delta > 0 else "warn")
+		_pop_card.pulse()
 	_last_pop = p
 
 

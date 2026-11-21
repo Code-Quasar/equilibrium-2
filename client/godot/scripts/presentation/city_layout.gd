@@ -12,8 +12,8 @@ extends RefCounted
 ## main road. The client enforces this with the engine's own disable/enable
 ## commands (see Play), so an unconnected building really stops working.
 
-const FOOT := 4          # every building reserves 4×4 cells, enough for its Level 2
-const SIZE := 56
+const FOOT := 2          # every building stands on a 2×2 site
+const SIZE := 46
 const SITES := 36        # engine tiles
 
 const GRASS := 0

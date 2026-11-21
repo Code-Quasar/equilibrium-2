@@ -70,13 +70,14 @@ func _process(delta: float) -> bool:
 			if s.phase == "play" and not s.view.is_empty() and t > 2.5:
 				shot("4_city")
 				# Panning with real input events, as a finger and as a mouse send them.
-				var cam: Vector2 = app.map.camera.position
+				var cam: Vector3 = app.map.camera.position
 				var press := InputEventScreenTouch.new(); press.index = 0; press.pressed = true; press.position = Vector2(420, 300)
 				root.push_input(press)
 				var drag := InputEventScreenDrag.new(); drag.index = 0; drag.position = Vector2(320, 260); drag.relative = Vector2(-100, -40)
 				root.push_input(drag)
 				var up := InputEventScreenTouch.new(); up.index = 0; up.pressed = false; up.position = Vector2(320, 260)
 				root.push_input(up)
+				print(("PASS" if root.get_viewport().get_camera_3d() == app.map.camera else "FAIL") + " the game map's camera is the one on screen")
 				print(("PASS" if app.map.camera.position != cam else "FAIL") + " a finger drag pans the map")
 				cam = app.map.camera.position
 				var mb := InputEventMouseButton.new(); mb.button_index = MOUSE_BUTTON_LEFT; mb.pressed = true; mb.position = Vector2(420, 300); mb.global_position = mb.position
@@ -101,16 +102,16 @@ func _process(delta: float) -> bool:
 				var L: CityLayout = app.map.layout
 				var near := L.spot_beside_main()
 				app.play.start_placing("recovery_hub")
-				app.play._on_ghost_drag(near + Vector2i(2, 2))
+				app.play._on_ghost_drag(near + Vector2i(1, 1))
 				set_meta("near", near)
 				go()
 		6:
 			if t > 0.4:
 				shot("5b_dragging")
-				app.play._on_ghost_drop(get_meta("near") + Vector2i(2, 2))
+				app.play._on_ghost_drop(get_meta("near") + Vector2i(1, 1))
 				app.play.start_placing("residential_district")
-				var at: Vector2i = get_meta("near") + Vector2i(6, 7)
-				app.play._on_ghost_drop(at + Vector2i(2, 2))
+				var at: Vector2i = get_meta("near") + Vector2i(4, 5)
+				app.play._on_ghost_drop(at + Vector2i(1, 1))
 				go(-6 + 100)
 		100:
 			if t > 1.0:
@@ -149,6 +150,35 @@ func _process(delta: float) -> bool:
 		11:
 			if t > 0.6:
 				shot("10_city_with_needs")
+				app.play._details("power", app.play._need_chips["power"])
+				step = 300
+				t = 0.0
+		300:
+			if t > 0.5:
+				shot("10b_power_details")
+				app.play._details("money", app.play._cash)
+				step = 301
+				t = 0.0
+		301:
+			if t > 0.5:
+				shot("10c_money_details")
+				app.play.close_details()
+				var rival := int(s.view["opponents"][0]["city_id"])
+				print(("PASS" if s.view["opponents"][0].has("buildings") else "FAIL") + " rivals carry a public building list")
+				app.play.visit(rival)
+				step = 302
+				t = 0.0
+		302:
+			if t > 1.2:
+				shot("10d_visiting_rival")
+				print(("PASS" if app.play.visiting >= 0 and app.map.read_only else "FAIL") + " visit mode is read-only")
+				app.play.visit(-1)
+				step = 303
+				t = 0.0
+		303:
+			if t > 0.8:
+				print(("PASS" if app.play.visiting == -1 and not app.map.read_only else "FAIL") + " back in my own city")
+				shot("10e_back_home")
 				# TEST FIXTURE ONLY: a final result shaped like match_finished.
 				var ranks := []
 				for r in s.view["public"]["rankings"]:
@@ -156,7 +186,8 @@ func _process(delta: float) -> bool:
 				s.final_result = {"type": "match_finished", "winners": [int(ranks[0]["city_id"])], "rankings": ranks, "duration": 1200}
 				s.phase = "over"
 				s.changed.emit("phase")
-				go()
+				step = 12
+				t = 0.0
 		12:
 			if t > 0.8:
 				shot("11_results_fixture")
