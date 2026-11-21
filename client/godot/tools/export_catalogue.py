@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Exports the read-only display catalogue for the graphical client.
 
-The server's protocol v1 carries no catalogue message, so the client shows
-building costs, build times, unlocks, Foundation packages, the announced
-event schedule and market price bands from a copy generated here from the
-frozen B1 file. It records B1's SHA-256 so the client test fails if the copy
+Protocol v1 carries no catalogue message, so the client shows building prices,
+build times, capacities, prerequisites, Foundation packages, the crisis
+schedule and contract prices from a copy generated here from the live B2.1
+file. It records the source's SHA-256 so the client test fails if the copy
 drifts. The client never uses these numbers to decide anything: the server
-validates every action.
+validates every action, and each player view says which buildings can start.
 
     python3 client/godot/tools/export_catalogue.py
 """
@@ -16,34 +16,44 @@ import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, "..", "..", ".."))
-B1 = os.path.join(ROOT, "config", "balance", "B1.json")
+SOURCE = os.path.join(ROOT, "config", "balance", "B2_1.json")
 OUT = os.path.join(HERE, "..", "data", "catalogue.json")
 
-raw = open(B1, "rb").read()
+raw = open(SOURCE, "rb").read()
 b = json.loads(raw)
-keep_l = ["cost_micro", "duration_seconds", "upkeep_micro_per_minute", "jobs", "demand_micro_E", "generation_micro_E",
-          "income_micro_per_minute", "air_micro_per_minute", "housing", "services", "collection_per_minute",
-          "recycling_per_minute", "reuse_per_minute", "treatment_per_minute", "waste_per_minute"]
 out = {
-    "source": "config/balance/B1.json",
+    "source": "config/balance/B2_1.json",
     "source_sha256": hashlib.sha256(raw).hexdigest(),
-    "match_seconds": b["match_seconds"],
-    "grid": [b["grid_width"], b["grid_height"]],
-    "construction_slots": b["construction_slots"],
-    "material_discount_percent": b["economy"]["material_discount_percent"],
-    "policy": {k: b["economy"][k] for k in ("policy_cooldown_seconds", "policy_fee_micro_per_minute")},
-    "migration": {"first": b["migration_first_second"], "interval": b["migration_interval_seconds"]},
-    "foundations": b["foundations"],
-    "buildings": {k: {"l1": {f: v["l1"].get(f, 0) for f in keep_l},
-                      "upgrade": {f: v["upgrade_delta"].get(f, 0) for f in keep_l},
-                      "build_unlock_micro": v["build_unlock_micro"],
-                      "upgrade_unlock_micro": v["upgrade_unlock_micro"]} for k, v in b["buildings"].items()},
-    "events": [{k: e[k] for k in ("id", "warning", "start", "end")} for e in b["events"]],
-    "market": {"prices": b["market"]["prices"], "duration": b["market"]["duration"],
-               "contract_limit": b["market"]["contract_limit"], "quote_seconds": b["market"]["quote_seconds"],
-               "selection_seconds": b["market"]["selection_seconds"]},
+    "match_seconds": b["match"]["duration_seconds"],
+    "grid": [b["world"]["building_grid_width"], b["world"]["building_grid_height"]],
+    "construction_slots": b["construction"]["simultaneous_projects_max"],
+    "materials": {
+        "buy_price": b["economy"]["external_virgin_material_buy_price_credits_per_unit"],
+        "sell_price": b["economy"]["external_material_sell_price_credits_per_unit"],
+        "capacity": b["economy"]["material_inventory_capacity_units"],
+    },
+    "landfill_fee": b["economy"]["landfill_fee_credits_per_waste_unit"],
+    "housing_slack": b["satisfaction"]["housing_satisfaction_slack_multiplier"],
+    "services_slack": b["satisfaction"]["services_satisfaction_slack_multiplier"],
+    "migration": {"first": b["migration"]["first_event_tick"], "last": b["migration"]["last_event_tick"],
+                  "interval": b["migration"]["event_interval_seconds"]},
+    "foundations": {k: {"buildings": [{"type": s["id"], "size": s["tier"]} for s in v["starting_buildings"]],
+                        "cash": v["starting_cash_credits"]} for k, v in b["foundations"].items()},
+    "buildings": b["buildings"],
+    "crises": [{k: c[k] for k in ("id", "announce_tick", "start_tick", "end_tick_exclusive")} for c in b["crises"]],
+    "market": {
+        "prices": {"electricity": b["market"]["prices"]["electricity_credits_per_capacity_minute"],
+                   "recyclable": b["market"]["prices"]["recyclable_treatment_credits_per_waste_unit"],
+                   "organic": b["market"]["prices"]["organic_treatment_credits_per_waste_unit"]},
+        "min_duration": b["market"]["min_duration_seconds"],
+        "default_duration": b["market"]["default_duration_seconds"],
+        "max_duration": b["market"]["max_duration_seconds"],
+        "max_offers": b["market"]["max_open_offers_per_city"],
+        "max_contracts": b["market"]["max_active_contracts_per_buyer"],
+        "electricity_max": b["market"]["electricity_capacity_units_per_contract_max"],
+    },
 }
-with open(OUT, "w") as f:
+with open(OUT, "w", newline="\n") as f:
     json.dump(out, f, indent=1, sort_keys=True)
     f.write("\n")
-print("wrote", os.path.relpath(OUT, ROOT), "from B1", out["source_sha256"][:12])
+print("wrote", os.path.relpath(OUT, ROOT), "from B2.1", out["source_sha256"][:12])

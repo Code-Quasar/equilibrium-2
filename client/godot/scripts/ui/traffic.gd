@@ -34,7 +34,7 @@ func set_demand(city: Dictionary, l: CityLayout) -> void:
 	_jobs.clear()
 	for b in city.get("buildings", []):
 		var t := int(b["tile"])
-		if str(b["type"]) in ["factory", "commercial_district", "public_services_center"] and b.get("status", "") == "complete" and b.get("operational", false) and l.placements.has(t):
+		if str(b["type"]) in ["factory", "commercial_district", "public_services_center"] and b.get("status", "") == "complete" and int(b.get("op", {}).get("fraction_micro", 0)) > 0 and l.placements.has(t):
 			jobs += 1
 			var r := l.rect(t)
 			_jobs.append(Vector2i(r.position.x - 1, r.position.y - 1))

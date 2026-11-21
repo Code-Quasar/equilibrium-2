@@ -1,40 +1,44 @@
 extends SceneTree
-## One headless entry point; child Godot processes also verify clean-process replay.
-func _initialize() -> void:
-	for script in ["tests/regression/core.gd", "tests/regression/construction.gd", "tests/regression/resources.gd", "tests/regression/regional.gd", "tests/regression/integrity_insights.gd", "tests/regression/booking_refunds.gd", "tests/integration/openings.gd"]:
-		var output: Array = []
-		var code: int = execute(script, [], output)
-		for block in output: print(block)
-		if code != 0 or has_script_error(output):
-			quit(1)
-			return
-	for scenario in ["construction", "resources", "services", "cancellation", "seller_refund"]:
-		var forward: Array = []
-		var reverse: Array = []
-		var script: String = "tests/replay/" + scenario + ".gd"
-		var a: int = execute(script, [], forward)
-		var b: int = execute(script, ["reverse"], reverse)
-		if a != 0 or b != 0 or has_script_error(forward) or has_script_error(reverse) or snapshot_line(forward) == "" or snapshot_line(forward) != snapshot_line(reverse):
-			printerr("Cross-process replay failed: " + scenario)
-			quit(1)
-			return
-		print("Cross-process %s replay: byte-identical canonical snapshots after 1200 ticks" % scenario)
-	quit(0)
+## Runs every engine and server suite in its own Godot process, then replays a
+## scripted full match in two processes with reversed submission order and
+## requires byte-identical canonical state.
+const SUITES = ["tests/rules/config_test.gd", "tests/rules/construction_test.gd", "tests/rules/waste_test.gd",
+	"tests/rules/economy_test.gd", "tests/rules/migration_test.gd", "tests/rules/market_test.gd",
+	"tests/integration/online_foundation.gd", "tests/integration/online_completion.gd"]
 
-func execute(script: String, args: Array, output: Array) -> int:
+func _initialize() -> void:
+	var failed: bool = false
+	for script in SUITES:
+		var output: Array = []
+		var code: int = run(script, [], output)
+		var text: String = "".join(output)
+		var summary: PackedStringArray = text.strip_edges().split("\n")
+		print(summary[summary.size() - 1])
+		if code != 0 or text.contains("SCRIPT ERROR") or text.contains("Parse Error") or text.contains("FAIL"):
+			printerr(text)
+			failed = true
+	var forward: Array = []
+	var reverse: Array = []
+	var ok: bool = run("tests/replay/scenario.gd", [], forward) == 0 and run("tests/replay/scenario.gd", ["reverse"], reverse) == 0
+	var a: String = canonical(forward)
+	if ok and not a.is_empty() and a == canonical(reverse):
+		print("Cross-process replay: byte-identical canonical state after 1200 ticks (%s)" % a.sha256_text())
+	else:
+		printerr("Cross-process replay differs or failed")
+		failed = true
+	quit(1 if failed else 0)
+
+func run(script: String, args: Array, output: Array) -> int:
 	var options: PackedStringArray = ["--headless", "--path", ProjectSettings.globalize_path("res://"),
-		"--log-file", "/tmp/equilibrium-" + script.get_file() + ".log", "--script", script]
+		"--log-file", ProjectSettings.globalize_path("user://" + script.get_file() + ".log"), "--script", script]
 	if not args.is_empty():
 		options.append("--")
 		options.append_array(PackedStringArray(args))
 	return OS.execute(OS.get_executable_path(), options, output, true)
 
-func has_script_error(output: Array) -> bool:
-	return str(output).contains("SCRIPT ERROR") or str(output).contains("Parse Error") or str(output).contains("FAIL")
-
-func snapshot_line(output: Array) -> String:
+func canonical(output: Array) -> String:
 	for block in output:
 		for line in str(block).split("\n"):
-			if line.begins_with("{\"balance\":"):
+			if line.begins_with("CANONICAL "):
 				return line
 	return ""

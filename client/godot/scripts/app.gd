@@ -159,7 +159,7 @@ func _hero(types: Array = ["residential_district", "recycling_center", "biogas_f
 	row.add_theme_constant_override("separation", 4)
 	for n in types:
 		var t := TextureRect.new()
-		t.texture = UI.thumbs.get_thumb(n, 2)
+		t.texture = UI.thumbs.get_thumb(n, "M")
 		t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		t.custom_minimum_size = Vector2(124, 100)
@@ -523,19 +523,19 @@ const HOWTO := [
 	["01", "Objective", ["residential_district"], ["people"],
 		"Four cities draw residents from one shared population. When the 20 minutes run out, the city with the most residents wins. Ties go to Satisfaction, then Environment, then cash."],
 	["02", "Build", ["commercial_district", "factory"], ["coin", "timer"],
-		"Open Build and drag a building onto open land. Each costs cash and takes real seconds to finish, and two can be under construction at once. Watch it rise: the bar shows how far along it is. Growing Development unlocks more buildings and upgrades."],
+		"Open Build, pick Small, Medium or Large and drag a building onto open land. Each costs cash plus materials (any you lack are bought) and takes real seconds to finish; two can be under construction at once. Watch it rise: the bar shows how far along it is. A building can later grow one size at a time and keeps working while it does."],
 	["03", "Roads", ["residential_district"], ["warning"],
 		"One main road crosses the map and cannot be removed. Draw your own roads for free. A building works only when it touches a road joined to the main road; otherwise it is switched off and shows a road bubble."],
-	["04", "Residents and Satisfaction", ["public_services_center", "green_space"], ["homes", "jobs"],
-		"Homes, jobs, public services, enough power and clean air raise Satisfaction. From 1:20 into the match and every 20 seconds after, residents move toward the more satisfying cities, as far as there are homes for them."],
+	["04", "Residents and Satisfaction", ["public_services_center", "park"], ["homes", "jobs"],
+		"Homes, jobs, public services, enough power and a clean environment raise Satisfaction. From 1:20 into the match and every 20 seconds after, residents move toward clearly more satisfying cities, a few at a time and only as far as there are homes for them."],
 	["05", "Electricity", ["renewable_power_plant", "fossil_power_plant"], ["power"],
 		"Power plants generate electricity and most buildings use it. Fossil plants are quick and cheap but dirty the air; renewable plants are clean. A shortage lowers Satisfaction, and spare power can be sold."],
-	["06", "Waste", ["recovery_hub", "recycling_center", "biogas_facility", "landfill"], ["waste", "materials"],
-		"Homes and businesses produce recyclable, organic and residual waste. A Recovery Hub collects and sorts it, a Recycling Center turns recyclables into materials that cut construction costs, Biogas turns organics into power, and a Landfill takes what is left at a cost to the environment. The separation policy makes homes and businesses produce less waste for a fee."],
+	["06", "Waste", ["collection_center", "sorting_center", "recycling_center", "biogas_facility"], ["waste", "materials"],
+		"Homes and businesses produce recyclable, organic and residual waste, and the city fleet hauls what it can to the landfill. Build the recovery chain in order: a Collection Center collects more and salvages some recyclables; a Sorting Center separates the rest and reuses more; a Recycling Center then makes the most materials and a Biogas Facility turns organics into power. Each step recovers more from the same waste. Materials pay for construction and feed factories; landfill damage never fades."],
 	["07", "Trade", ["commercial_district"], ["offers"],
-		"In Trade, buy or sell recyclable treatment, organic treatment and electricity with the other cities. A contract lasts 90 seconds and a city can hold two at a time. Prices move within a fixed range."],
+		"In Trade, offer spare electricity, recycling or organic treatment to the other cities at fixed prices, or accept their offers for one to five minutes. The buyer's escrow holds the most a contract could cost; only real deliveries are paid and the rest comes back."],
 	["08", "Crises", ["fossil_power_plant"], ["event", "pollution"],
-		"Four crises are announced a minute ahead: Smog Alert at 6:30, Waste Surge at 11:00, Power Shortage at 15:30 and EQUILIBRIUM 2050 at 18:00, which hits with all three at once. Prepare before they arrive."],
+		"Three crises are announced 45 seconds ahead and last a minute and a half: Smog Alert at 5:00, Waste Surge at 10:00 and Power Shortage at 15:00. Their damage stays after they end, so prepare before they arrive. EQUILIBRIUM 2050 marks the end of the match."],
 	["09", "Win", ["residential_district", "commercial_district"], ["badge", "appeal"],
 		"Keep residents satisfied and housed, keep power and waste under control, and watch your rivals in the Rivals panel, where you can also visit their cities. The final ranking is decided by the server at the end of the match."],
 ]
@@ -577,7 +577,7 @@ func _show_howto() -> void:
 		art_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		for b in ch[2]:
 			var tr := TextureRect.new()
-			tr.texture = UI.thumbs.get_thumb(b, 2 if ch[0] in ["01", "09"] else 1)
+			tr.texture = UI.thumbs.get_thumb(b, "M" if ch[0] in ["01", "09"] else "S")
 			tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			tr.custom_minimum_size = Vector2(minf(170.0, 250.0 / ch[2].size()), 130)
@@ -724,8 +724,9 @@ func _show_draft() -> void:
 		var box := UI.vbox(8)
 		var row := UI.hbox(12)
 		var t := TextureRect.new()
-		var start_type: String = {"industrial_legacy": "factory", "circular_foundation": "recycling_center", "energy_pioneer": "renewable_power_plant", "investment_district": "commercial_district"}.get(id, "commercial_district")
-		t.texture = UI.thumbs.get_thumb(start_type, 1)
+		var pkg: Dictionary = cat.get(id, {})
+		var starts: Array = pkg.get("buildings", [])
+		t.texture = UI.thumbs.get_thumb(str(starts[-1]["type"]) if not starts.is_empty() else "commercial_district", "S")
 		t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		t.custom_minimum_size = Vector2(92, 92)
@@ -734,10 +735,9 @@ func _show_draft() -> void:
 		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		info.add_child(UI.label(meta[0], "Title"))
 		info.add_child(UI.label(meta[1], "Caption", true))
-		var pkg: Dictionary = cat.get(id, {})
-		var start := "Starts with %s cash" % Catalogue.fmt(float(pkg.get("money", 0)))
-		if str(pkg.get("building", "")) != "":
-			start += " and a %s" % Catalogue.building_name(pkg["building"])
+		var start := "Starts with %s cash" % Catalogue.fmt(float(pkg.get("cash", 0)))
+		if not starts.is_empty():
+			start += " and " + " and ".join(starts.map(func(x): return "a %s %s" % [Catalogue.size_name(str(x["size"])), Catalogue.building_name(str(x["type"]))]))
 		info.add_child(UI.label(start, "Small", true))
 		row.add_child(info)
 		box.add_child(row)
@@ -801,10 +801,12 @@ func _show_results() -> void:
 	left.add_child(_hero())
 	var own: Dictionary = session.view.get("own_city", {})
 	if not own.is_empty():
-		var lines := ["Recycled: %s units" % Catalogue.micro(own.get("waste_totals", {}).get("recycled", 0)),
-			"Organic waste treated: %s units" % Catalogue.micro(own.get("waste_totals", {}).get("organic_processed", 0)),
-			"Materials recovered: %s" % Catalogue.micro(own.get("recovered_micro", 0)),
-			"Sent to landfill: %s units" % Catalogue.micro(own.get("disposed_micro", 0))]
+		var w: Dictionary = own.get("waste", {}).get("totals", {})
+		var lines := ["Materials recovered: %s (collection %s, sorting %s, recycling %s)" % [
+				Catalogue.micro(int(w.get("salvaged", 0)) + int(w.get("sorting_reuse", 0)) + int(w.get("recycled_materials", 0))),
+				Catalogue.micro(w.get("salvaged", 0)), Catalogue.micro(w.get("sorting_reuse", 0)), Catalogue.micro(w.get("recycled_materials", 0))],
+			"Organic waste turned into power: %s units" % Catalogue.micro(w.get("digested", 0)),
+			"Sent to landfill: %s units" % Catalogue.micro(w.get("landfilled", 0))]
 		left.add_child(UI.panel("Card", UI.label("Your circular economy\n" + "\n".join(lines), "", true)))
 	left.add_child(UI.button("Back to menu", "PrimaryButton", "play", func(): session.leave()))
 	var right := UI.vbox(8)

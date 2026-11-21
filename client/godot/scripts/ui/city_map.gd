@@ -159,12 +159,12 @@ func show_demo() -> void:
 	layout = CityLayout.new("menu-demo")
 	traffic.layout = layout
 	var types := ["residential_district", "commercial_district", "residential_district", "public_services_center",
-		"green_space", "residential_district", "recycling_center", "renewable_power_plant", "commercial_district",
-		"recovery_hub", "residential_district", "biogas_facility", "green_space", "factory"]
+		"park", "residential_district", "recycling_center", "renewable_power_plant", "commercial_district",
+		"collection_center", "residential_district", "biogas_facility", "sorting_center", "factory"]
 	var bs := []
 	for i in types.size():
 		layout.auto_place(i)
-		bs.append({"id": i, "tile": i, "type": types[i], "level": 2 if i % 3 == 0 else 1, "status": "complete", "operational": true})
+		bs.append({"id": i, "tile": i, "type": types[i], "size": ["M", "S", "L"][i % 3], "status": "complete", "op": {"fraction_micro": 1000000}})
 	city = {"buildings": bs, "population": 1800, "projects": []}
 	_build_frame()
 	_build_ground()
@@ -487,7 +487,7 @@ func rebuild() -> void:
 		if layout.placements.has(int(b["tile"])):
 			_add_building(b)
 	if not placing.is_empty():
-		var ghost := _compose(str(placing["type"]), 1, Vector2i(placing["at"]))
+		var ghost := _compose(str(placing["type"]), str(placing["size"]), Vector2i(placing["at"]))
 		_overlay_all(ghost, _ghost_ok if placing.get("ok", false) else _ghost_bad)
 		_buildings.add_child(ghost)
 		_mark_site(Vector2i(placing["at"]), Color(0.31, 0.9, 0.47, 0.35) if placing.get("ok", false) else Color(0.91, 0.36, 0.29, 0.4))
@@ -495,9 +495,9 @@ func rebuild() -> void:
 		_mark_site(layout.placements[selected], Color(1, 0.84, 0.3, 0.45))
 
 
-## A building's models on its site, at its level.
-func _compose(type: String, level: int, at: Vector2i) -> Node3D:
-	var root := Models.compose(type, level, float(CityLayout.FOOT))
+## A building's models on its site, at its size.
+func _compose(type: String, size: String, at: Vector2i) -> Node3D:
+	var root := Models.compose(type, size, float(CityLayout.FOOT))
 	root.position = Vector3(at.x + CityLayout.FOOT / 2.0, 0, at.y + CityLayout.FOOT / 2.0)
 	return root
 
@@ -506,7 +506,7 @@ func _add_building(b: Dictionary) -> void:
 	var t := int(b["tile"])
 	var id := int(b["id"])
 	var at: Vector2i = layout.placements[t]
-	var node := _compose(str(b["type"]), int(b.get("level", 1)), at)
+	var node := _compose(str(b["type"]), str(b.get("size", "S")), at)
 	_buildings.add_child(node)
 	var p: Variant = _project_for(id)
 	if b.get("status", "") != "complete" or p != null:
@@ -515,9 +515,10 @@ func _add_building(b: Dictionary) -> void:
 		# all from the server's ticks.
 		var done := int(p["complete_tick"]) if p != null else tick + 1
 		var start := int(b.get("created_tick", 0))
+		var target := str(p.get("target_size", b.get("size", "S"))) if p != null else str(b.get("size", "S"))
 		if p != null and str(p.get("kind", "")) == "upgrade":
-			start = done - int(Catalogue.spec(str(b["type"])).get("upgrade", {}).get("duration_seconds", 1))
-		var ghost := _compose(str(b["type"]), int(b.get("level", 1)) + (1 if p != null and str(p.get("kind", "")) == "upgrade" else 0), at)
+			start = done - int(Catalogue.upgrade_to(str(b["type"]), target).get("seconds", 1))
+		var ghost := _compose(str(b["type"]), target, at)
 		_override_all(ghost, _blueprint)
 		_marks.add_child(ghost)
 		if b.get("visitor", false):

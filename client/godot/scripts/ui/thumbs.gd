@@ -6,7 +6,7 @@ extends Node
 
 const SIZE := Vector2i(256, 192)
 
-var _tex := {}           # "type:level" -> ImageTexture
+var _tex := {}           # "type:size" -> ImageTexture
 var _queue: Array = []
 var _vp: SubViewport
 var _job: Node3D
@@ -39,12 +39,12 @@ func _ready() -> void:
 	_vp.add_child(env)
 
 
-func get_thumb(type: String, level := 1) -> Texture2D:
-	var key := "%s:%d" % [type, level]
+func get_thumb(type: String, size := "S") -> Texture2D:
+	var key := "%s:%s" % [type, size]
 	if not _tex.has(key):
 		var img := Image.create(SIZE.x, SIZE.y, false, Image.FORMAT_RGBA8)
 		_tex[key] = ImageTexture.create_from_image(img)
-		_queue.append([type, level, key])
+		_queue.append([type, size, key])
 	return _tex[key]
 
 

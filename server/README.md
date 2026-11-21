@@ -1,6 +1,6 @@
 # Authoritative online server
 
-The root Godot 4.5.1 project hosts one private lobby/match per process. One to four human WebSocket clients own distinct seats. When the ready host starts, empty seats become deterministic server bots. All four seats draft through the existing lifecycle; every action uses the existing engine envelope and validator.
+The root Godot 4.7.2 project hosts one private lobby/match per process. One to four human WebSocket clients own distinct seats. When the ready host starts, empty seats become deterministic server bots. All four seats draft through the existing lifecycle; every action uses the existing engine envelope and validator.
 
 ## Run
 
@@ -28,7 +28,7 @@ Before start, a disconnected player releases its seat and credential. The lowest
 
 Rejoin credentials expire after two hours, rotate on rejoin, and revoke the former socket. Rejoin sends the current view/draft plus receipts for the latest 64 actions; retry an older identical action to retrieve its retained receipts. At most 4096 distinct actions are retained per seat for the session. There is no process-crash persistence.
 
-Bots reuse `LocalBot.PLAN`: one candidate construction every 90 ticks, submitted only if the engine preview permits it. This is a minimal opponent, not competitive AI. Bots receive no grants and never control human seats.
+Bots follow `bot_controller.gd`'s fixed plan: one Small construction every 90 ticks, in an order that respects the Collection → Sorting → Recycling/Biogas prerequisites, submitted only if the engine preview permits it. They are minimal opponents, not competitive AI. Bots receive no grants and never control human seats.
 
 ## Checks
 
@@ -37,7 +37,7 @@ godot --headless --path . --log-file /tmp/equilibrium-online-tests.log --script 
 python3 tools/check_repository.py
 ```
 
-After installing the terminal requirements in a virtual environment, run real socket cases separately:
+After installing the terminal requirements in a virtual environment, run real socket cases separately (set `GODOT` if the executable is not on `PATH`):
 
 ```sh
 python tests/integration/network_authority.py --humans 2
@@ -52,7 +52,7 @@ python tests/integration/network_authority.py --terminal
 
 `--humans 0` selects transport/host-departure edge tests; it is not a supported zero-human lobby. Each case launches a real server, creates independent WebSocket connections and requests graceful shutdown. It fails nonzero on assertion, timeout, server script error or abnormal shutdown.
 
-`--terminal` launches the actual terminal program with piped input, exercises lobby creation, readiness, drafting and a policy action, checks private credential-file permissions and verifies clean exit with stdin still open.
+`--terminal` launches the actual terminal program with piped input, exercises lobby creation, readiness, drafting and a construction action, checks private credential-file permissions and verifies clean exit with stdin still open.
 
 The complete injected-clock test is separate and may take longer than 30 seconds. It executes all 1200 real engine ticks without waiting for wall-clock seconds:
 

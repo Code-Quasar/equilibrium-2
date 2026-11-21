@@ -2,6 +2,7 @@
 import argparse
 import asyncio
 import json
+import os
 import socket
 import subprocess
 import tempfile
@@ -10,6 +11,7 @@ from pathlib import Path
 from websockets.asyncio.client import connect
 
 ROOT = Path(__file__).resolve().parents[2]
+BUILD = {'building_type': 'park', 'size': 'S'}
 
 class Peer:
     def __init__(self, ws):
@@ -21,14 +23,14 @@ class Peer:
         m = dict(v=1, type=message_type, correlation_id=f"r{self.counter}", **body)
         await self.ws.send(json.dumps(m))
         return m['correlation_id']
-    async def wait(self, kind, predicate=lambda m: True):
+    async def wait(self, kind, predicate=lambda m: True, timeout=5):
         async def receive():
             while True:
                 m = json.loads(await self.ws.recv())
                 self.messages.append(m)
                 if m['type'] == kind and predicate(m):
                     return m
-        return await asyncio.wait_for(receive(), 5)
+        return await asyncio.wait_for(receive(), timeout)
 
 async def peer(url):
     p = Peer(await connect(url, proxy=None, max_size=1048576))
@@ -38,7 +40,7 @@ async def peer(url):
 
 def safe(v, seat):
     forbidden = {'rng_state', 'pending_commands', 'fingerprint', 'command_results',
-                 'last_command_seq', 'ledger', 'reserved', 'rejoin_token', 'rate_carries'}
+                 'last_command_seq', 'reserved', 'rejoin_token', 'carries', 'fee_remainder'}
     def walk(x):
         if isinstance(x, dict):
             assert not forbidden.intersection(x), x.keys()
@@ -99,28 +101,28 @@ async def scenario(url, humans):
             safe(v,c['seat'])
             assert v['tick']==0
             initial.append(v)
-            await p.send('submit_action', action_id='policy', kind='set_reduce_waste', payload={'enabled':True})
-            ack = await p.wait('action_ack', lambda m:m['action_id']=='policy')
+            await p.send('submit_action', action_id='build', kind='construct', payload=BUILD)
+            ack = await p.wait('action_ack', lambda m:m['action_id']=='build')
             assert ack['status']=='queued'
         views = []
         for p,c in zip(ps,credentials):
-            ack = await p.wait('action_ack', lambda m:m['phase']=='execution' and m['action_id']=='policy')
+            ack = await p.wait('action_ack', lambda m:m['phase']=='execution' and m['action_id']=='build')
             assert ack['status']=='applied' and ack['execution_tick']==0
             v = await p.wait('player_view', lambda m:m['tick']==1)
             safe(v,c['seat'])
-            assert v['own_city']['reduce_waste']
+            assert any(b['type']=='park' and b['status']=='constructing' for b in v['own_city']['buildings'])
             views.append(v)
         assert all(v['public']==views[0]['public'] for v in views)
         lobby = next(m for m in reversed(ps[0].messages) if m['type']=='lobby_state')
         assert sum(s['controller']=='bot' for s in lobby['seats'])==4-humans
         p = ps[0]
         for field,value in [('player_id',3),('match_id','fake'),('command_seq',0),('command_id','fake'),('server_received_tick',0),('seat',3)]:
-            await p.send('submit_action',action_id='spoof',kind='set_reduce_waste',payload={'enabled':False},**{field:value})
+            await p.send('submit_action',action_id='spoof',kind='construct',payload=BUILD,**{field:value})
             assert (await p.wait('protocol_error'))['code']=='invalid_fields'
-        await p.send('submit_action',action_id='policy',kind='set_reduce_waste',payload={'enabled':True})
-        assert (await p.wait('action_ack',lambda m:m['action_id']=='policy' and m['phase']=='execution'))['status']=='applied'
-        await p.send('submit_action',action_id='policy',kind='set_reduce_waste',payload={'enabled':False})
-        assert (await p.wait('action_ack',lambda m:m['action_id']=='policy'))['status']=='action_id_conflict'
+        await p.send('submit_action',action_id='build',kind='construct',payload=BUILD)
+        assert (await p.wait('action_ack',lambda m:m['action_id']=='build' and m['phase']=='execution'))['status']=='applied'
+        await p.send('submit_action',action_id='build',kind='construct',payload=dict(BUILD,size='M'))
+        assert (await p.wait('action_ack',lambda m:m['action_id']=='build'))['status']=='action_id_conflict'
         await p.send('advance',seconds=100)
         assert (await p.wait('protocol_error'))['code']=='unknown_message'
         # Real disconnect/rejoin, credential rotation and retained acknowledgment recovery.
@@ -133,7 +135,7 @@ async def scenario(url, humans):
         v = await re.wait('player_view')
         safe(v,new['seat'])
         assert v['tick']>=1
-        assert (await re.wait('action_ack',lambda m:m['action_id']=='policy' and m['phase']=='execution'))['status']=='applied'
+        assert (await re.wait('action_ack',lambda m:m['action_id']=='build' and m['phase']=='execution'))['status']=='applied'
         thief = await peer(url)
         await thief.send('rejoin',lobby_id=credentials[0]['lobby_id'],rejoin_token=credentials[0]['rejoin_token'])
         assert (await thief.wait('protocol_error'))['code']=='authentication_failed'
@@ -211,35 +213,38 @@ async def marketplace_scenario(url):
             choices += 1
         for p in ps: await p.wait('match_started')
 
-        # Circular Foundation has genuine spare recyclable capacity; Industrial
-        # has genuine recyclable-treatment need from its operating Factory.
-        seller, buyer, outsider = ps[1], ps[0], ps[2]
+        # Energy Pioneer has 112 E of demonstrated spare power. Industrial Legacy
+        # builds a Commercial District, whose load (63 + 26 + 14 E) exceeds its
+        # 100 E municipal supply, so delivery and payment are real.
+        seller, buyer, outsider = ps[2], ps[0], ps[1]
+        await buyer.send('submit_action', action_id='market-build', kind='construct',
+                         payload={'building_type':'commercial_district','size':'S'})
+        assert (await buyer.wait('action_ack', lambda m:m['action_id']=='market-build' and m['phase']=='execution'))['status'] == 'applied'
+        await seller.wait('player_view', lambda m:m['tick']>=1)
         await seller.send('submit_action', action_id='market-offer', kind='publish_offer',
-                          payload={'type':'recyclable','rate':10000000,'price':1000000})
-        assert (await seller.wait('action_ack', lambda m:m['action_id']=='market-offer'))['status'] == 'queued'
+                          payload={'type':'electricity','rate':5000000})
         assert (await seller.wait('action_ack', lambda m:m['action_id']=='market-offer' and m['phase']=='execution'))['status'] == 'applied'
-        buyer_view = await buyer.wait('player_view', lambda m:any(o['seller']==1 and o['type']=='recyclable' for o in m['marketplace']['offers']))
-        offer = next(o for o in buyer_view['marketplace']['offers'] if o['seller']==1 and o['type']=='recyclable')
+        buyer_view = await buyer.wait('player_view', lambda m:any(o['seller']==2 for o in m['marketplace']['offers']))
+        offer = next(o for o in buyer_view['marketplace']['offers'] if o['seller']==2)
+        assert offer['price_micro'] == 220000
 
         await outsider.send('submit_action', action_id='market-steal', kind='withdraw_offer', payload={'id':offer['id']})
-        assert (await outsider.wait('action_ack', lambda m:m['action_id']=='market-steal'))['status'] == 'queued'
         stolen = await outsider.wait('action_ack', lambda m:m['action_id']=='market-steal' and m['phase']=='execution')
         assert stolen['status'] == 'offer_not_owned'
 
-        await buyer.send('submit_action', action_id='market-accept', kind='accept_quote', payload={'id':offer['id']})
-        assert (await buyer.wait('action_ack', lambda m:m['action_id']=='market-accept'))['status'] == 'queued'
+        await buyer.send('submit_action', action_id='market-accept', kind='accept_offer', payload={'id':offer['id'],'duration':120})
         assert (await buyer.wait('action_ack', lambda m:m['action_id']=='market-accept' and m['phase']=='execution'))['status'] == 'applied'
-        buyer_final = await buyer.wait('player_view', lambda m:any(k.get('delivered',0)>0 and k.get('paid',0)>0 for k in m['own_city']['contracts']))
-        seller_final = await seller.wait('player_view', lambda m:any(k.get('delivered',0)>0 and k.get('paid',0)>0 for k in m['own_city']['contracts']))
-        contract = next(k for k in buyer_final['own_city']['contracts'] if k['delivered']>0)
+        delivered = lambda m:any(k['delivered_micro']>0 and k['paid_micro']>0 for k in m['own_city']['contracts'])
+        buyer_final = await buyer.wait('player_view', delivered, timeout=60)
+        seller_final = await seller.wait('player_view', lambda m:m['tick']>=buyer_final['tick'] and delivered(m), timeout=60)
+        contract = next(k for k in buyer_final['own_city']['contracts'] if k['delivered_micro']>0)
         seller_contract = next(k for k in seller_final['own_city']['contracts'] if k['id']==contract['id'])
-        assert seller_contract['delivered']==contract['delivered'] and seller_contract['paid']==contract['paid']
-        outsider_view = await outsider.wait('player_view', lambda m:any(k['id']==contract['id'] for k in m['marketplace']['contracts']))
+        assert seller_contract['delivered_micro']>=contract['delivered_micro'] and seller_contract['escrow_micro']==contract['escrow_micro']
+        outsider_view = await outsider.wait('player_view', lambda m:any(k['id']==contract['id'] for k in m['marketplace']['contracts']), timeout=60)
         public_contract = next(k for k in outsider_view['marketplace']['contracts'] if k['id']==contract['id'])
-        assert 'delivered' not in public_contract and 'paid' not in public_contract and 'booking_micro' not in public_contract
-        assert not outsider_view['notifications']
-        safe(buyer_final, credentials[0]['seat']); safe(seller_final, credentials[1]['seat']); safe(outsider_view, credentials[2]['seat'])
-        print(f"PASS marketplace: contract={contract['id']} delivered={contract['delivered']} paid={contract['paid']}", flush=True)
+        assert not {'delivered_micro','paid_micro','escrow_micro'}.intersection(public_contract)
+        safe(buyer_final, credentials[0]['seat']); safe(seller_final, credentials[2]['seat']); safe(outsider_view, credentials[1]['seat'])
+        print(f"PASS marketplace: contract={contract['id']} delivered={contract['delivered_micro']} paid={contract['paid_micro']}", flush=True)
     finally:
         for p in ps: await p.ws.close()
 
@@ -301,7 +306,7 @@ async def terminal_scenario(url):
             '--url', url, '--create', '--session-file', str(credentials), '--json',
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE)
-        selected, policy_id = False, None
+        selected, build_id = False, None
         try:
             while True:
                 raw = await asyncio.wait_for(client.stdout.readline(), 5)
@@ -315,14 +320,15 @@ async def terminal_scenario(url):
                     client.stdin.write(('foundation '+m['available_foundations'][0]+'\n').encode())
                     selected = True
                 if m['type'] == 'match_started':
-                    client.stdin.write(b'action set_reduce_waste {"enabled":true}\n')
+                    client.stdin.write(b'action construct {"building_type":"park","size":"S"}\n')
                 if m['type'] == 'action_ack':
-                    if m['status'] == 'queued': policy_id = m['action_id']
-                    if m['action_id'] == policy_id and m['phase'] == 'execution':
+                    if m['status'] == 'queued': build_id = m['action_id']
+                    if m['action_id'] == build_id and m['phase'] == 'execution':
                         assert m['status'] == 'applied'
                         break
                 await client.stdin.drain()
-            assert credentials.stat().st_mode & 0o777 == 0o600
+            if os.name == 'posix':  # owner-only mode bits exist only on POSIX
+                assert credentials.stat().st_mode & 0o777 == 0o600
             assert json.loads(credentials.read_text())['rejoin_token']
             client.stdin.write(b'quit\n')
             await client.stdin.drain()
@@ -340,7 +346,7 @@ async def main(humans, terminal=False, marketplace=False, draft_disconnect=False
     with tempfile.TemporaryDirectory(prefix='equilibrium-net-') as directory:
         d=Path(directory)
         with (d/'server.log').open('w') as log:
-            command = ['godot','--headless','--path',str(ROOT),'--log-file',str(d/'godot.log'),'--script','server/main.gd','--','--port',str(port),'--stop-file',str(d/'stop')]
+            command = [os.environ.get('GODOT','godot'),'--headless','--path',str(ROOT),'--log-file',str(d/'godot.log'),'--script','server/main.gd','--','--port',str(port),'--stop-file',str(d/'stop')]
             if draft_disconnect: command += ['--draft-grace-ms','750']
             process=subprocess.Popen(command,stdout=log,stderr=log)
             try:

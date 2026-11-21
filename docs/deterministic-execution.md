@@ -1,31 +1,34 @@
 # Deterministic execution
 
-The simulation advances in explicit one-second ticks, independent of wall-clock time, scenes, rendering and network transport. Authoritative money, material, waste, power and score quantities are integers using the B1 micro-unit scale; population, IDs and ticks are integers.
+The simulation advances in explicit one-second ticks, independent of wall-clock time, scenes, rendering and network transport. Every authoritative quantity is an integer: money, materials, waste, electricity, pollution and scores in micro-units (10⁻⁶), and population, plots, IDs and ticks as counts.
 
 ## Commands and transactions
 
-Every match command contains `match_id`, `player_id`, `command_seq`, `command_id`, `command_type`, `payload` and `server_received_tick`. The authenticated player is supplied separately. Commands sort by receipt tick, seed-rotated player order and sequence.
+A command envelope holds `match_id`, `player_id`, `command_seq`, `command_id`, `command_type`, `payload` and `server_received_tick`; the authenticated seat is supplied separately. Commands in a tick are ordered by receipt tick, then seed-rotated seat, then sequence.
 
-Submission validates envelope shape and identity, then queues a copy. Execution revalidates game conditions against earlier commands in the same tick. Duplicate IDs are idempotent only when their identity matches; sequence conflicts and stale sequences are rejected. A rejected gameplay command records its result without leaking partial state or RNG changes.
+Submission validates the envelope and queues a copy. Duplicate IDs are idempotent only when their content matches, and sequence conflicts and stale sequences are rejected. Execution revalidates every command against the state left by the commands before it. A rejected command records its reason and leaves the state exactly as it was.
 
-Each tick runs against deep-copied state and RNG. A phase error rejects the entire tick, leaving authoritative state, pending commands and RNG untouched. Successful publication atomically commits the candidate.
+Each tick runs on a deep copy. If any phase fails or breaks an invariant, the whole tick is rejected and the authoritative state and pending commands are untouched.
 
 ## Phase order
 
-The semantic phase list lives in `simulation/core/pipeline.gd`. In summary, a tick applies event boundaries and construction completion; executes commands; resolves municipal finance, reservations, facility funding, workforce, power, production, waste collection and treatment; updates environment and scores; performs scheduled migration; closes contracts; advances time; validates and publishes.
+The phase list in `simulation/match.gd` is binding and is part of the canonical serialization. [Specification §12](specification.md#12-tick-order) lists it. In particular:
 
-Observable ordering is binding. In particular, maintenance is paid before output, electricity contracts settle against realized supply, biogas processed this tick becomes available next tick, migration uses the common post-tick score snapshot, and contracts use half-open `[start_tick, end_tick)` delivery.
+- upkeep is paid before anything operates;
+- electricity contracts settle against real supply and deficit before allocation;
+- biogas processed in one tick powers only the next;
+- each waste stage takes only mass the previous stage released;
+- migration reads one frozen post-tick snapshot;
+- contracts deliver over `[start_tick, end_tick)`.
 
-## Arithmetic and randomness
+## Arithmetic
 
-Rate conversion retains integer carry residues. Do not replace floor, ceiling or fixed-point boundaries with floating-point approximations. Migration uses its separately versioned Q12 exponential approximation.
+Per-minute rates become per-second amounts with the exact remainder carried for each building and flow, so cumulative flows are exact. Products use overflow-safe integer arithmetic, and proportional splits use largest remainders with ties to the earliest index. Rounding points are deliberate: purchases and contract charges round up, sales round down, and fees carry their remainder. Do not replace them with floating-point approximations.
 
-The explicit Park–Miller RNG starts from the supplied seed and uses rejection sampling for bounded draws. Drafting consumes this RNG; fixed events do not. Projections and snapshots consume no randomness.
+Ticks consume no randomness. The seeded Park–Miller RNG is used only to order the Foundation draft.
 
 ## Canonical serialization
 
-The canonical encoder supports null, booleans, integers, strings, arrays and string-keyed dictionaries. Dictionary keys sort lexicographically and arrays retain order; floats are rejected. Serialization includes full state, pending commands, RNG algorithm/state, the B1 snapshot, system manifest, registered command types and start status.
+The canonical encoder supports null, booleans, integers, strings, arrays and string-keyed dictionaries; keys are sorted and floats are rejected. `serialize()` covers the full state, pending commands, the normalized configuration, the phase list and the command types. Carries, escrow and ledgers affect future ticks and are part of equivalence.
 
-Carries, queues, reservations, ledgers and RNG state affect future execution and cannot be omitted from equivalence checks. Replay tests reconstruct matches from commands and compare complete canonical output after 1,200 ticks. Arbitrary saved-state loading is not a supported interface.
-
-The exact tick contract and invariants remain normative in sections 19–20 of the [specification](EQUILIBRIUM_SPEC_v1.0.md).
+The replay test runs a scripted 1,200-tick match in two processes with reversed submission order and requires byte-identical output.

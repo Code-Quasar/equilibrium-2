@@ -1,10 +1,21 @@
 extends RefCounted
-static func apply(state: Dictionary, schedule: Array, balance: Dictionary) -> void:
-	state["event_state"] = {"warnings": [], "active": [], "interval_start": state.tick}
-	var modifiers: Dictionary = {"household_percent":100,"factory_percent":100,"commerce_percent":100,"air_percent":100,"municipal_E":balance.municipal_generation_E,"uncollected_penalty_micro":balance.local_simulation.uncollected_penalty_micro}
-	for event in schedule:
-		if state.tick >= event.warning and state.tick < event.start: state.event_state.warnings.append(event.id)
-		if state.tick >= event.start and state.tick < event.end:
-			state.event_state.active.append(event.id)
-			for key in event.modifiers: modifiers[key] = event.modifiers[key]
-	for c in state.cities: c["event_modifiers"] = modifiers.duplicate()
+## Announced regional crises. Multipliers act only on new flows during the active
+## interval [start, end); stocks they caused persist after the crisis ends.
+const A = preload("res://simulation/core/arithmetic.gd")
+const EFFECTS = ["emission", "air_decay", "household", "factory", "commercial", "municipal_power"]
+
+## Phase: crisis state for the interval [tick, tick + 1).
+static func apply(state: Dictionary, crises: Array) -> void:
+	var effects: Dictionary = {}
+	for key in EFFECTS:
+		effects[key] = A.S
+	var announced: Array = []
+	var active: Array = []
+	for crisis in crises:
+		if state.tick >= crisis.announce and state.tick < crisis.start:
+			announced.append(crisis.id)
+		if state.tick >= crisis.start and state.tick < crisis.end:
+			active.append(crisis.id)
+			for key in EFFECTS:
+				effects[key] = A.mul(effects[key], crisis[key])
+	state["crisis"] = {"announced": announced, "active": active, "effects": effects}

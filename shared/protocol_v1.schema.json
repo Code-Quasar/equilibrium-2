@@ -246,8 +246,27 @@
               "type": "object",
               "properties": {
                 "building_type": {
-                  "type": "string",
-                  "maxLength": 1024
+                  "enum": [
+                    "residential_district",
+                    "factory",
+                    "commercial_district",
+                    "public_services_center",
+                    "park",
+                    "collection_center",
+                    "sorting_center",
+                    "recycling_center",
+                    "biogas_facility",
+                    "landfill",
+                    "fossil_power_plant",
+                    "renewable_power_plant"
+                  ]
+                },
+                "size": {
+                  "enum": [
+                    "S",
+                    "M",
+                    "L"
+                  ]
                 },
                 "tile": {
                   "type": "integer",
@@ -256,59 +275,8 @@
                 }
               },
               "required": [
-                "building_type"
-              ],
-              "additionalProperties": false
-            },
-            "observed_tick": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 1200
-            }
-          },
-          "required": [
-            "v",
-            "type",
-            "correlation_id",
-            "action_id",
-            "kind",
-            "payload"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "v": {
-              "const": 1
-            },
-            "type": {
-              "const": "submit_action"
-            },
-            "correlation_id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64,
-              "pattern": "^[a-zA-Z0-9_-]+$"
-            },
-            "action_id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64,
-              "pattern": "^[a-zA-Z0-9_-]+$"
-            },
-            "kind": {
-              "const": "set_reduce_waste"
-            },
-            "payload": {
-              "type": "object",
-              "properties": {
-                "enabled": {
-                  "type": "boolean"
-                }
-              },
-              "required": [
-                "enabled"
+                "building_type",
+                "size"
               ],
               "additionalProperties": false
             },
@@ -620,6 +588,122 @@
               "pattern": "^[a-zA-Z0-9_-]+$"
             },
             "kind": {
+              "const": "sell_materials"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "amount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000000000
+                }
+              },
+              "required": [
+                "amount"
+              ],
+              "additionalProperties": false
+            },
+            "observed_tick": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1200
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "action_id",
+            "kind",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "submit_action"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "action_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "kind": {
+              "const": "publish_offer"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": [
+                    "electricity",
+                    "recyclable",
+                    "organic"
+                  ]
+                },
+                "rate": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000000000
+                }
+              },
+              "required": [
+                "type",
+                "rate"
+              ],
+              "additionalProperties": false
+            },
+            "observed_tick": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1200
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "action_id",
+            "kind",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "submit_action"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "action_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "kind": {
               "const": "withdraw_offer"
             },
             "payload": {
@@ -674,7 +758,7 @@
               "pattern": "^[a-zA-Z0-9_-]+$"
             },
             "kind": {
-              "const": "accept_quote"
+              "const": "accept_offer"
             },
             "payload": {
               "type": "object",
@@ -683,60 +767,11 @@
                   "type": "integer",
                   "minimum": 0,
                   "maximum": 100000000000
-                }
-              },
-              "required": [
-                "id"
-              ],
-              "additionalProperties": false
-            },
-            "observed_tick": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 1200
-            }
-          },
-          "required": [
-            "v",
-            "type",
-            "correlation_id",
-            "action_id",
-            "kind",
-            "payload"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "v": {
-              "const": 1
-            },
-            "type": {
-              "const": "submit_action"
-            },
-            "correlation_id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64,
-              "pattern": "^[a-zA-Z0-9_-]+$"
-            },
-            "action_id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64,
-              "pattern": "^[a-zA-Z0-9_-]+$"
-            },
-            "kind": {
-              "const": "renew_contract"
-            },
-            "payload": {
-              "type": "object",
-              "properties": {
-                "id": {
+                },
+                "duration": {
                   "type": "integer",
                   "minimum": 0,
-                  "maximum": 100000000000
+                  "maximum": 1200
                 }
               },
               "required": [
@@ -795,201 +830,6 @@
               },
               "required": [
                 "id"
-              ],
-              "additionalProperties": false
-            },
-            "observed_tick": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 1200
-            }
-          },
-          "required": [
-            "v",
-            "type",
-            "correlation_id",
-            "action_id",
-            "kind",
-            "payload"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "v": {
-              "const": 1
-            },
-            "type": {
-              "const": "submit_action"
-            },
-            "correlation_id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64,
-              "pattern": "^[a-zA-Z0-9_-]+$"
-            },
-            "action_id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64,
-              "pattern": "^[a-zA-Z0-9_-]+$"
-            },
-            "kind": {
-              "const": "publish_offer"
-            },
-            "payload": {
-              "type": "object",
-              "properties": {
-                "type": {
-                  "type": "string",
-                  "maxLength": 1024
-                },
-                "rate": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 100000000000
-                },
-                "price": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 100000000000
-                }
-              },
-              "required": [
-                "type",
-                "rate",
-                "price"
-              ],
-              "additionalProperties": false
-            },
-            "observed_tick": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 1200
-            }
-          },
-          "required": [
-            "v",
-            "type",
-            "correlation_id",
-            "action_id",
-            "kind",
-            "payload"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "v": {
-              "const": 1
-            },
-            "type": {
-              "const": "submit_action"
-            },
-            "correlation_id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64,
-              "pattern": "^[a-zA-Z0-9_-]+$"
-            },
-            "action_id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64,
-              "pattern": "^[a-zA-Z0-9_-]+$"
-            },
-            "kind": {
-              "const": "submit_quote"
-            },
-            "payload": {
-              "type": "object",
-              "properties": {
-                "type": {
-                  "type": "string",
-                  "maxLength": 1024
-                },
-                "rate": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 100000000000
-                },
-                "price": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 100000000000
-                },
-                "request_id": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 100000000000
-                }
-              },
-              "required": [
-                "type",
-                "rate",
-                "price",
-                "request_id"
-              ],
-              "additionalProperties": false
-            },
-            "observed_tick": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 1200
-            }
-          },
-          "required": [
-            "v",
-            "type",
-            "correlation_id",
-            "action_id",
-            "kind",
-            "payload"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "v": {
-              "const": 1
-            },
-            "type": {
-              "const": "submit_action"
-            },
-            "correlation_id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64,
-              "pattern": "^[a-zA-Z0-9_-]+$"
-            },
-            "action_id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64,
-              "pattern": "^[a-zA-Z0-9_-]+$"
-            },
-            "kind": {
-              "const": "request_quotes"
-            },
-            "payload": {
-              "type": "object",
-              "properties": {
-                "type": {
-                  "type": "string",
-                  "maxLength": 1024
-                },
-                "rate": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 100000000000
-                }
-              },
-              "required": [
-                "type",
-                "rate"
               ],
               "additionalProperties": false
             },
@@ -1348,9 +1188,6 @@
             "marketplace": {
               "type": "object"
             },
-            "notifications": {
-              "type": "array"
-            },
             "final_result": {
               "type": [
                 "object",
@@ -1368,7 +1205,6 @@
             "own_city",
             "opponents",
             "marketplace",
-            "notifications",
             "final_result"
           ],
           "additionalProperties": false

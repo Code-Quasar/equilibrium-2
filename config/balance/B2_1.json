@@ -1,0 +1,239 @@
+{
+  "version": "B2.1",
+  "match": {
+    "players": 4,
+    "duration_seconds": 1200,
+    "total_residents": 4000,
+    "initial_residents_per_city": 1000,
+    "tick_seconds": 1
+  },
+  "world": {
+    "building_grid_width": 6,
+    "building_grid_height": 6
+  },
+  "baseline_city": {
+    "starting_housing_capacity": 1150,
+    "starting_service_capacity": 1150,
+    "starting_municipal_job_slots": 500,
+    "starting_materials": 0,
+    "starting_air_burden": 3,
+    "starting_landfill_damage": 1,
+    "municipal_electricity_generation_capacity": 100,
+    "municipal_base_electricity_demand": 43,
+    "municipal_electricity_per_resident": 0.02,
+    "municipal_waste_collection_capacity_per_min": 40,
+    "municipal_landfill_capacity_per_min": 38,
+    "municipal_upkeep_credits_per_min": 52
+  },
+  "satisfaction": {
+    "weights_points": {
+      "environment": 35,
+      "realized_employment": 20,
+      "housing_slack": 15,
+      "electricity_reliability": 15,
+      "effective_services": 15
+    },
+    "housing_satisfaction_slack_multiplier": 1.15,
+    "services_satisfaction_slack_multiplier": 1.15
+  },
+  "migration": {
+    "first_event_tick": 80,
+    "last_event_tick": 1180,
+    "event_interval_seconds": 20,
+    "min_satisfaction_gap_points": 0.75,
+    "migration_per_gap_point": 1.6,
+    "migration_per_source_per_event_max": 12,
+    "migration_per_target_per_event_max": 30,
+    "source_min_residents": 350
+  },
+  "employment": {
+    "staffing_priority_order": [
+      "collection_center",
+      "sorting_center",
+      "recycling_center",
+      "biogas_facility",
+      "landfill",
+      "public_services_center",
+      "fossil_power_plant",
+      "renewable_power_plant",
+      "factory",
+      "commercial_district",
+      "park"
+    ]
+  },
+  "electricity": {
+    "allocation_priority": [
+      "collection_center",
+      "sorting_center",
+      "recycling_center",
+      "biogas_facility",
+      "landfill",
+      "public_services_center",
+      "fossil_power_plant",
+      "renewable_power_plant",
+      "factory",
+      "commercial_district"
+    ]
+  },
+  "economy": {
+    "population_tax_credits_per_resident_per_min": 0.11,
+    "external_virgin_material_buy_price_credits_per_unit": 6,
+    "external_material_sell_price_credits_per_unit": 2,
+    "material_inventory_capacity_units": 500,
+    "landfill_fee_credits_per_waste_unit": 0.85,
+    "emissions_levy_credits_per_air_point_emitted": 2,
+    "standby_upkeep_fraction": 0.2
+  },
+  "construction": {
+    "simultaneous_projects_max": 2,
+    "cancel_project_refund_fraction_of_base_credits": 0.8,
+    "cancel_project_materials_refund_fraction": 1,
+    "demolition_refund_fraction_of_base_credits": 0.1,
+    "reactivation_cooldown_seconds": 10
+  },
+  "waste": {
+    "household_waste_per_resident_per_min": 0.03,
+    "household_composition": {"recyclable": 0.5, "organic": 0.3, "residual": 0.2},
+    "factory_composition": {"recyclable": 0.6, "organic": 0.1, "residual": 0.3},
+    "commercial_composition": {"recyclable": 0.6, "organic": 0.15, "residual": 0.25},
+    "mixed_inventory_cap": 300,
+    "sorted_recyclable_inventory_cap": 250,
+    "sorted_organic_inventory_cap": 250
+  },
+  "environment": {
+    "air_burden_cap": 80,
+    "landfill_damage_cap": 60,
+    "natural_air_decay_points_per_min": 0.12,
+    "landfill_damage_points_per_waste_mass": 0.045,
+    "park_amenity_cap_points": 4.5,
+    "untreated_pressure": {
+      "uncollected_street": 0.16,
+      "collected_mixed": 0.045,
+      "sorted_and_residual": 0.025,
+      "cap": 45
+    }
+  },
+  "crises": [
+    {"id": "smog_alert", "announce_tick": 255, "start_tick": 300, "end_tick_exclusive": 390, "emission_multiplier": 1.5, "air_natural_decay_multiplier": 0.5},
+    {"id": "waste_surge", "announce_tick": 555, "start_tick": 600, "end_tick_exclusive": 690, "household_waste_multiplier": 1.5, "factory_waste_multiplier": 1.25, "commerce_waste_multiplier": 1.2},
+    {"id": "power_shortage", "announce_tick": 855, "start_tick": 900, "end_tick_exclusive": 990, "municipal_baseline_grid_output_multiplier": 0.55},
+    {"id": "equilibrium_2050", "announce_tick": 1140, "start_tick": 1200, "end_tick_exclusive": 1200}
+  ],
+  "market": {
+    "max_open_offers_per_city": 3,
+    "max_active_contracts_per_buyer": 2,
+    "min_duration_seconds": 60,
+    "default_duration_seconds": 120,
+    "max_duration_seconds": 300,
+    "electricity_capacity_units_per_contract_max": 40,
+    "prices": {
+      "electricity_credits_per_capacity_minute": 0.22,
+      "recyclable_treatment_credits_per_waste_unit": 0.75,
+      "organic_treatment_credits_per_waste_unit": 0.7
+    }
+  },
+  "buildings": {
+    "residential_district": {
+      "required_completed_buildings": [],
+      "S": {"construction_credits": 125, "construction_materials": 9, "construction_seconds": 25, "maintenance_credits_per_min": 4, "housing_capacity": 180},
+      "M": {"construction_credits": 235, "construction_materials": 17, "construction_seconds": 43, "maintenance_credits_per_min": 7, "housing_capacity": 380,
+        "upgrade_from_S": {"additional_credits": 119, "additional_materials": 8, "seconds": 33}},
+      "L": {"construction_credits": 380, "construction_materials": 28, "construction_seconds": 65, "maintenance_credits_per_min": 11, "housing_capacity": 670,
+        "upgrade_from_M": {"additional_credits": 157, "additional_materials": 11, "seconds": 49}}
+    },
+    "factory": {
+      "required_completed_buildings": [],
+      "S": {"construction_credits": 175, "construction_materials": 12, "construction_seconds": 28, "maintenance_credits_per_min": 22, "job_slots": 155, "gross_income_credits_per_min": 145, "factory_materials_consumed_per_min": 7, "waste_generated_per_min": 14, "power_demand_capacity": 26, "air_emissions_points_per_min": 0.75},
+      "M": {"construction_credits": 315, "construction_materials": 22, "construction_seconds": 48, "maintenance_credits_per_min": 38, "job_slots": 285, "gross_income_credits_per_min": 265, "factory_materials_consumed_per_min": 13, "waste_generated_per_min": 25, "power_demand_capacity": 47, "air_emissions_points_per_min": 1.35,
+        "upgrade_from_S": {"additional_credits": 152, "additional_materials": 10, "seconds": 36}},
+      "L": {"construction_credits": 495, "construction_materials": 36, "construction_seconds": 73, "maintenance_credits_per_min": 61, "job_slots": 450, "gross_income_credits_per_min": 410, "factory_materials_consumed_per_min": 20, "waste_generated_per_min": 39, "power_demand_capacity": 75, "air_emissions_points_per_min": 2.2,
+        "upgrade_from_M": {"additional_credits": 195, "additional_materials": 14, "seconds": 55}}
+    },
+    "commercial_district": {
+      "required_completed_buildings": [],
+      "S": {"construction_credits": 145, "construction_materials": 8, "construction_seconds": 25, "maintenance_credits_per_min": 14, "job_slots": 100, "gross_income_credits_per_min": 75, "waste_generated_per_min": 5, "power_demand_capacity": 14, "air_emissions_points_per_min": 0.07},
+      "M": {"construction_credits": 260, "construction_materials": 14, "construction_seconds": 43, "maintenance_credits_per_min": 26, "job_slots": 185, "gross_income_credits_per_min": 137, "waste_generated_per_min": 9, "power_demand_capacity": 26, "air_emissions_points_per_min": 0.12,
+        "upgrade_from_S": {"additional_credits": 125, "additional_materials": 6, "seconds": 33}},
+      "L": {"construction_credits": 425, "construction_materials": 23, "construction_seconds": 66, "maintenance_credits_per_min": 43, "job_slots": 300, "gross_income_credits_per_min": 222, "waste_generated_per_min": 15, "power_demand_capacity": 42, "air_emissions_points_per_min": 0.19,
+        "upgrade_from_M": {"additional_credits": 179, "additional_materials": 9, "seconds": 50}}
+    },
+    "public_services_center": {
+      "required_completed_buildings": [],
+      "S": {"construction_credits": 125, "construction_materials": 8, "construction_seconds": 27, "maintenance_credits_per_min": 8, "service_capacity": 230, "job_slots": 24, "power_demand_capacity": 9},
+      "M": {"construction_credits": 220, "construction_materials": 14, "construction_seconds": 44, "maintenance_credits_per_min": 15, "service_capacity": 470, "job_slots": 40, "power_demand_capacity": 16,
+        "upgrade_from_S": {"additional_credits": 103, "additional_materials": 6, "seconds": 33}},
+      "L": {"construction_credits": 355, "construction_materials": 24, "construction_seconds": 65, "maintenance_credits_per_min": 25, "service_capacity": 760, "job_slots": 65, "power_demand_capacity": 25,
+        "upgrade_from_M": {"additional_credits": 146, "additional_materials": 10, "seconds": 49}}
+    },
+    "park": {
+      "required_completed_buildings": [],
+      "S": {"construction_credits": 95, "construction_materials": 4, "construction_seconds": 20, "maintenance_credits_per_min": 3, "job_slots": 3, "air_cleanup_points_per_min": 0.24, "park_amenity_points": 1},
+      "M": {"construction_credits": 170, "construction_materials": 7, "construction_seconds": 35, "maintenance_credits_per_min": 5, "job_slots": 5, "air_cleanup_points_per_min": 0.43, "park_amenity_points": 1.7,
+        "upgrade_from_S": {"additional_credits": 81, "additional_materials": 3, "seconds": 27}},
+      "L": {"construction_credits": 280, "construction_materials": 12, "construction_seconds": 53, "maintenance_credits_per_min": 9, "job_slots": 8, "air_cleanup_points_per_min": 0.72, "park_amenity_points": 2.6,
+        "upgrade_from_M": {"additional_credits": 119, "additional_materials": 5, "seconds": 40}}
+    },
+    "collection_center": {
+      "required_completed_buildings": [],
+      "S": {"construction_credits": 95, "construction_materials": 5, "construction_seconds": 23, "maintenance_credits_per_min": 7, "job_slots": 24, "power_demand_capacity": 7, "collection_waste_per_min": 23, "collection_direct_reuse_fraction": 0.08},
+      "M": {"construction_credits": 175, "construction_materials": 10, "construction_seconds": 39, "maintenance_credits_per_min": 12, "job_slots": 42, "power_demand_capacity": 12, "collection_waste_per_min": 45, "collection_direct_reuse_fraction": 0.1,
+        "upgrade_from_S": {"additional_credits": 87, "additional_materials": 5, "seconds": 30}},
+      "L": {"construction_credits": 280, "construction_materials": 17, "construction_seconds": 58, "maintenance_credits_per_min": 19, "job_slots": 66, "power_demand_capacity": 19, "collection_waste_per_min": 72, "collection_direct_reuse_fraction": 0.12,
+        "upgrade_from_M": {"additional_credits": 114, "additional_materials": 7, "seconds": 44}}
+    },
+    "sorting_center": {
+      "required_completed_buildings": ["collection_center"],
+      "S": {"construction_credits": 100, "construction_materials": 7, "construction_seconds": 25, "maintenance_credits_per_min": 9, "job_slots": 28, "power_demand_capacity": 11, "sorting_waste_per_min": 34, "sort_capture_recyclable": 0.8, "sort_capture_organic": 0.75, "sorting_direct_reuse_fraction": 0.16},
+      "M": {"construction_credits": 190, "construction_materials": 13, "construction_seconds": 42, "maintenance_credits_per_min": 16, "job_slots": 51, "power_demand_capacity": 20, "sorting_waste_per_min": 63, "sort_capture_recyclable": 0.85, "sort_capture_organic": 0.81, "sorting_direct_reuse_fraction": 0.18,
+        "upgrade_from_S": {"additional_credits": 98, "additional_materials": 6, "seconds": 32}},
+      "L": {"construction_credits": 310, "construction_materials": 22, "construction_seconds": 63, "maintenance_credits_per_min": 26, "job_slots": 80, "power_demand_capacity": 32, "sorting_waste_per_min": 100, "sort_capture_recyclable": 0.9, "sort_capture_organic": 0.86, "sorting_direct_reuse_fraction": 0.2,
+        "upgrade_from_M": {"additional_credits": 130, "additional_materials": 9, "seconds": 48}}
+    },
+    "recycling_center": {
+      "required_completed_buildings": ["collection_center", "sorting_center"],
+      "S": {"construction_credits": 135, "construction_materials": 10, "construction_seconds": 29, "maintenance_credits_per_min": 11, "job_slots": 34, "power_demand_capacity": 14, "recycling_waste_per_min": 20, "material_yield_fraction": 0.8},
+      "M": {"construction_credits": 245, "construction_materials": 18, "construction_seconds": 47, "maintenance_credits_per_min": 21, "job_slots": 62, "power_demand_capacity": 26, "recycling_waste_per_min": 39, "material_yield_fraction": 0.83,
+        "upgrade_from_S": {"additional_credits": 119, "additional_materials": 8, "seconds": 36}},
+      "L": {"construction_credits": 400, "construction_materials": 31, "construction_seconds": 72, "maintenance_credits_per_min": 35, "job_slots": 100, "power_demand_capacity": 43, "recycling_waste_per_min": 63, "material_yield_fraction": 0.86,
+        "upgrade_from_M": {"additional_credits": 168, "additional_materials": 13, "seconds": 54}}
+    },
+    "biogas_facility": {
+      "required_completed_buildings": ["collection_center", "sorting_center"],
+      "S": {"construction_credits": 140, "construction_materials": 10, "construction_seconds": 29, "maintenance_credits_per_min": 11, "job_slots": 20, "power_demand_capacity": 5, "biogas_organic_waste_per_min": 12, "biogas_energy_capacity_per_organic_unit_per_min": 2.6, "biogas_residue_fraction": 0.2},
+      "M": {"construction_credits": 245, "construction_materials": 18, "construction_seconds": 46, "maintenance_credits_per_min": 20, "job_slots": 37, "power_demand_capacity": 9, "biogas_organic_waste_per_min": 25, "biogas_energy_capacity_per_organic_unit_per_min": 2.8, "biogas_residue_fraction": 0.18,
+        "upgrade_from_S": {"additional_credits": 114, "additional_materials": 8, "seconds": 35}},
+      "L": {"construction_credits": 405, "construction_materials": 30, "construction_seconds": 70, "maintenance_credits_per_min": 34, "job_slots": 60, "power_demand_capacity": 15, "biogas_organic_waste_per_min": 42, "biogas_energy_capacity_per_organic_unit_per_min": 3, "biogas_residue_fraction": 0.15,
+        "upgrade_from_M": {"additional_credits": 173, "additional_materials": 12, "seconds": 53}}
+    },
+    "landfill": {
+      "required_completed_buildings": [],
+      "S": {"construction_credits": 90, "construction_materials": 5, "construction_seconds": 21, "maintenance_credits_per_min": 6, "job_slots": 14, "power_demand_capacity": 4, "landfill_waste_per_min": 28},
+      "M": {"construction_credits": 165, "construction_materials": 9, "construction_seconds": 36, "maintenance_credits_per_min": 10, "job_slots": 24, "power_demand_capacity": 7, "landfill_waste_per_min": 53,
+        "upgrade_from_S": {"additional_credits": 81, "additional_materials": 4, "seconds": 27}},
+      "L": {"construction_credits": 270, "construction_materials": 15, "construction_seconds": 55, "maintenance_credits_per_min": 16, "job_slots": 39, "power_demand_capacity": 11, "landfill_waste_per_min": 86,
+        "upgrade_from_M": {"additional_credits": 114, "additional_materials": 6, "seconds": 42}}
+    },
+    "fossil_power_plant": {
+      "required_completed_buildings": [],
+      "S": {"construction_credits": 120, "construction_materials": 7, "construction_seconds": 25, "maintenance_credits_per_min": 15, "job_slots": 12, "power_generated_capacity": 90, "air_emissions_points_per_min": 0.95},
+      "M": {"construction_credits": 220, "construction_materials": 13, "construction_seconds": 43, "maintenance_credits_per_min": 27, "job_slots": 21, "power_generated_capacity": 170, "air_emissions_points_per_min": 1.8,
+        "upgrade_from_S": {"additional_credits": 108, "additional_materials": 6, "seconds": 33}},
+      "L": {"construction_credits": 360, "construction_materials": 22, "construction_seconds": 64, "maintenance_credits_per_min": 43, "job_slots": 32, "power_generated_capacity": 275, "air_emissions_points_per_min": 2.9,
+        "upgrade_from_M": {"additional_credits": 152, "additional_materials": 9, "seconds": 48}}
+    },
+    "renewable_power_plant": {
+      "required_completed_buildings": [],
+      "S": {"construction_credits": 205, "construction_materials": 10, "construction_seconds": 32, "maintenance_credits_per_min": 6, "job_slots": 10, "power_generated_capacity": 75},
+      "M": {"construction_credits": 365, "construction_materials": 18, "construction_seconds": 55, "maintenance_credits_per_min": 11, "job_slots": 18, "power_generated_capacity": 145,
+        "upgrade_from_S": {"additional_credits": 173, "additional_materials": 8, "seconds": 42}},
+      "L": {"construction_credits": 590, "construction_materials": 30, "construction_seconds": 83, "maintenance_credits_per_min": 18, "job_slots": 29, "power_generated_capacity": 235,
+        "upgrade_from_M": {"additional_credits": 244, "additional_materials": 12, "seconds": 63}}
+    }
+  },
+  "foundations": {
+    "industrial_legacy": {"starting_buildings": [{"id": "factory", "tier": "S"}], "starting_cash_credits": 413, "starting_materials_units": 0},
+    "circular_foundation": {"starting_buildings": [{"id": "collection_center", "tier": "S"}, {"id": "sorting_center", "tier": "S"}], "starting_cash_credits": 393, "starting_materials_units": 0},
+    "energy_pioneer": {"starting_buildings": [{"id": "renewable_power_plant", "tier": "S"}], "starting_cash_credits": 395, "starting_materials_units": 0},
+    "investment_district": {"starting_buildings": [], "starting_cash_credits": 660, "starting_materials_units": 0}
+  }
+}

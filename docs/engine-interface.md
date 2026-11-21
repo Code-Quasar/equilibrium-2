@@ -1,52 +1,52 @@
 # Engine interface
 
-## Direct match API
+## Match API
 
-Instantiate `simulation/match.gd` and use these production methods:
+Instantiate `simulation/match.gd`:
 
 ```gdscript
 initialize(match_id: String, seed_value: int, foundations: Array) -> String
 submit(raw: Variant, authenticated_player: int) -> Dictionary
 preview(player_id: int, kind: String, payload: Dictionary) -> String
+build_options(player_id: int) -> Dictionary
 step(validate_each_phase: bool = true) -> Dictionary
 snapshot() -> Dictionary
 serialize() -> String
 ```
 
-`initialize` requires four valid Foundation identifiers. It returns an empty string on success or an error identifier. `submit` queues a validated command envelope. `preview` validates a copy and never reserves resources or guarantees later execution. `step` advances exactly one second. `snapshot` returns a deep copy. `serialize` returns the canonical deterministic payload.
+- `initialize` takes four unique Foundation identifiers in seat order and returns `""` or an error.
+- `submit` queues a validated envelope and returns `{"status": "queued"}` or a rejection.
+- `preview` checks a command against a copy of the current state; it neither reserves anything nor guarantees later execution.
+- `build_options` reports, for every building type and size, `""` if it can be started now or the reason it cannot, such as `requires_sorting_center` or `insufficient_funds`.
+- `step` advances one second and returns each queued command's result.
+- `snapshot` returns a deep copy, and `serialize` the canonical payload.
 
-Use `simulation/interfaces/lifecycle.gd` when unique-Foundation drafting is required before match initialization. Draft commands use `select_foundation` with a single `foundation` string payload.
+`simulation/interfaces/lifecycle.gd` runs the unique Foundation draft first. Draft commands are `select_foundation` with a `foundation` payload; the fourth pick creates the match.
 
-## Match envelopes and payloads
+## Commands
 
-Envelope keys are `match_id`, `player_id`, `command_seq`, `command_id`, `command_type`, `payload` and `server_received_tick`. Payload field counts and types are exact; unrelated fields are rejected.
+Payload fields and types are exact; unknown fields are rejected. Quantities are integer micro-units.
 
 | Command | Payload |
 |---|---|
-| `construct` | `building_type`; optional complete-match `tile` from 0–35 |
-| `upgrade`, `disable`, `enable`, `demolish`, `cancel_project` | owned `building_id` |
-| `set_reduce_waste` | boolean `enabled` |
-| `publish_offer` | `type`, `rate`, `price` |
-| `request_quotes` | `type`, `rate` |
-| `submit_quote` | `type`, `rate`, `price`, `request_id` |
-| `withdraw_offer`, `accept_quote`, `renew_contract`, `cancel_contract` | offer or contract `id` |
+| `construct` | `building_type`, `size` (`S`, `M`, `L`), optional `tile` 0–35 |
+| `upgrade`, `cancel_project`, `demolish`, `disable`, `enable` | `building_id` |
+| `sell_materials` | `amount` |
+| `publish_offer` | `type` (`electricity`, `recyclable`, `organic`), `rate` |
+| `accept_offer` | `id`, optional `duration` in seconds (default 120) |
+| `withdraw_offer`, `cancel_contract` | `id` |
 
-Service types are `recyclable`, `organic` and `electricity`. Rates and prices are positive integer micro-units constrained by B1 and authoritative need/capacity checks.
+Rejections are lowercase identifiers. Some examples: `requires_collection_center`, `requires_sorting_center`, `prerequisite_under_construction`, `dependent_buildings_exist`, `housing_below_population`, `construction_slots_full`, `not_enough_time`, `insufficient_funds`, `insufficient_seller_capacity`, `contract_limit`.
 
-## Local JSON-lines adapter
+## State
 
-`tools/local_match.gd` hosts `simulation/interfaces/local_protocol.gd`. It reads one JSON object per line from standard input and writes responses prefixed by `@RESULT `. Start it with:
+A snapshot holds the match identity, tick and status, the current crisis state, the four cities, the market, the migration record and the final result. Each city holds:
 
-```sh
-godot --headless --path . --script tools/local_match.gd -- 42 4
-```
+- population, cash, materials and their ledgers;
+- the waste inventories and per-tick and cumulative flows;
+- buildings with their operating record for the tick, and projects;
+- power, employment, capacities, Environment terms and Satisfaction components.
 
-Optional arguments are seed, human-seat count (`2`, `3` or `4`) and the literal `admin`. Protocol requests require `v: 1`, a nonnegative integer `id` and an `op` string. Supported operations are `snapshot`, `seat`, `command`, `preview`, `advance`, `replay` and `quit`. JSON numbers must be finite exact integers within ±(2^53−1).
+The online server sends each seat only `projections/player_view.gd`'s allowlisted view, including its `build_options`.
 
-The adapter provides a local integration boundary without multiplayer authentication. It exposes authoritative state, accepts ordinary commands and delegates gameplay rules to the simulation.
-
-## State and compatibility
-
-Snapshots contain match/city state, contracts, offers, events, migration and final results. The local projection adds rankings, next boundaries, capacity details and read-only insights. Canonical serialization additionally contains pending work, RNG and registration metadata.
-
-Schema version `1`, semantic scopes, command identifiers, state keys and canonical ordering are compatibility boundaries. Replays require a compatible engine and B1. There is no general snapshot-restoration or save-migration API.
+The configuration, state keys, command identifiers and phase list are compatibility boundaries for replays. There is no save-migration or arbitrary state-loading interface.

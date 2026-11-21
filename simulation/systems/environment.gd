@@ -1,39 +1,46 @@
 extends RefCounted
+## Environment = clamp(100 - air - landfill damage - untreated pressure + min(cap, park amenity), 0, 100).
+## Air and landfill damage are persistent stocks; pressure is recomputed from the waste
+## physically present this second. Parks clean air only and cannot offset landfill
+## damage or street waste.
 const A = preload("res://simulation/core/arithmetic.gd")
+const Buildings = preload("res://simulation/systems/buildings.gd")
 var b: Dictionary
 var catalogue: RefCounted
-func _init(balance: Dictionary, buildings: RefCounted) -> void:
-	b = balance
+
+func _init(config: Dictionary, buildings: RefCounted) -> void:
+	b = config
 	catalogue = buildings
 
-func update(state: Dictionary, _ctx: Dictionary, _rng: RefCounted) -> String:
-	var r: Dictionary = b.local_simulation
+## Phase: update stocks from this second's emissions, cleanup and disposal.
+func update(state: Dictionary, _ctx: Dictionary) -> String:
+	var e: Dictionary = b.environment
 	for city in state.cities:
-		var air_change: int = -A.rate(city, "natural_air", r.air_recovery_micro_per_minute)
+		var emitted: int = 0
+		var cleanup: int = A.per_tick(city.carries, "air_decay", A.mul(e.air_decay, state.crisis.effects.air_decay))
+		var amenity: int = 0
 		for building in city.buildings:
-			var rate: int = catalogue.effects(building).air_micro_per_minute
-			var delta: int = A.rate(city, "air:" + str(building.id), absi(rate), A.efficiency(city, building))
-			air_change += delta if rate >= 0 else -delta
-		city.air_micro = clampi(city.air_micro + air_change, 0, r.air_max_micro)
-		var landfill_change: int = A.carried(city, "landfill_damage", city.disposed_this_tick, r.landfill_damage_per_unit_micro, A.S)
-		landfill_change -= A.rate(city, "natural_landfill", r.landfill_recovery_micro_per_minute)
-		city.landfill_damage_micro = clampi(city.landfill_damage_micro + landfill_change, 0, r.landfill_max_micro)
-		var overflow: int = A.mul(A.total(city.uncollected_micro), city.get("event_modifiers", {}).get("uncollected_penalty_micro", r.uncollected_penalty_micro))
-		overflow += A.mul(A.total(city.sorted_micro), r.sorted_penalty_micro)
-		city["overflow_micro"] = mini(r.overflow_max_micro, overflow)
-		# Keep event-adjusted air contribution distinct from the persistent stock.
-		city["effective_air_micro"] = A.mul(city.air_micro, city.get("event_modifiers", {}).get("air_percent", 100), 100)
-		city.environment_micro = clampi(100 * A.S - city.effective_air_micro - city.landfill_damage_micro - city.overflow_micro, 0, 100 * A.S)
-		city.environment_status = "evaluated"
+			emitted += building.op.emitted_micro
+			if building.type == "park" and building.op.funded:
+				var t: Dictionary = catalogue.tier(building)
+				cleanup += A.per_tick(building.carries, "cleanup", t.cleanup, building.op.fraction_micro)
+				amenity += A.mul(t.amenity, building.op.fraction_micro)
+		city.air_micro = clampi(city.air_micro + emitted - cleanup, 0, e.air_cap)
+		var damage: int = A.carried(city.carries, "landfill_damage", city.waste.tick.landfilled, e.landfill_damage, A.S)
+		city.landfill_damage_micro = mini(city.landfill_damage_micro + damage, e.landfill_cap)
+		var stored: int = A.total(city.sorted_micro) + city.disposal_micro
+		city.pressure_micro = mini(e.pressure_cap, A.mul(A.total(city.street_micro), e.pressure_street)
+			+ A.mul(A.total(city.mixed_micro), e.pressure_mixed) + A.mul(stored, e.pressure_stored))
+		city.amenity_micro = mini(amenity, e.amenity_cap)
+		city.environment_micro = clampi(100 * A.S - city.air_micro - city.landfill_damage_micro - city.pressure_micro + city.amenity_micro, 0, 100 * A.S)
 	return ""
 
-static func satisfaction(city: Dictionary, weights: Dictionary) -> void:
-	var denominator: int = maxi(1, city.population) * weights.capacity_requirement_percent
-	var c: Dictionary = {
-		"environment": A.divi(weights.environment_points * city.environment_micro, 100),
-		"employment": A.divi(weights.employment_points * city.capacity.realized_jobs_micro, maxi(1, city.population)),
-		"housing": A.divi(weights.housing_points * mini(denominator * A.S, city.capacity.housing * 100 * A.S), denominator),
-		"services": A.divi(weights.services_points * mini(denominator * A.S, city.capacity.services_micro * 100), denominator),
-		"power": A.mul(weights.power_points * A.S, city.electricity.delivered, city.electricity.demand) if city.electricity.demand > 0 else weights.power_points * A.S}
-	city.satisfaction_components_micro = c
-	city.satisfaction_micro = clampi(A.total(c.values()), 0, 100 * A.S)
+func validate_city(city: Dictionary) -> String:
+	var e: Dictionary = b.environment
+	if city.air_micro < 0 or city.air_micro > e.air_cap or city.landfill_damage_micro < 0 or city.landfill_damage_micro > e.landfill_cap:
+		return "environment_stock_bounds"
+	if city.pressure_micro < 0 or city.pressure_micro > e.pressure_cap or city.amenity_micro < 0 or city.amenity_micro > e.amenity_cap:
+		return "environment_term_bounds"
+	if city.environment_micro < 0 or city.environment_micro > 100 * A.S:
+		return "score_bounds"
+	return ""

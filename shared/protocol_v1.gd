@@ -9,17 +9,16 @@ const FIELDS = {
 	"submit_action":{"action_id":TYPE_STRING,"kind":TYPE_STRING,"payload":TYPE_DICTIONARY},
 	"rejoin":{"lobby_id":TYPE_STRING,"rejoin_token":TYPE_STRING}
 }
+## Required payload fields per action; OPTIONAL lists the fields an action may add.
 const PAYLOADS = {
-	"construct":{"building_type":TYPE_STRING},
+	"construct":{"building_type":TYPE_STRING,"size":TYPE_STRING},
 	"upgrade":{"building_id":TYPE_INT},"disable":{"building_id":TYPE_INT},
 	"enable":{"building_id":TYPE_INT},"demolish":{"building_id":TYPE_INT},"cancel_project":{"building_id":TYPE_INT},
-	"set_reduce_waste":{"enabled":TYPE_BOOL},
-	"publish_offer":{"type":TYPE_STRING,"rate":TYPE_INT,"price":TYPE_INT},
-	"request_quotes":{"type":TYPE_STRING,"rate":TYPE_INT},
-	"submit_quote":{"type":TYPE_STRING,"rate":TYPE_INT,"price":TYPE_INT,"request_id":TYPE_INT},
-	"withdraw_offer":{"id":TYPE_INT},"accept_quote":{"id":TYPE_INT},
-	"renew_contract":{"id":TYPE_INT},"cancel_contract":{"id":TYPE_INT}
+	"sell_materials":{"amount":TYPE_INT},
+	"publish_offer":{"type":TYPE_STRING,"rate":TYPE_INT},
+	"withdraw_offer":{"id":TYPE_INT},"accept_offer":{"id":TYPE_INT},"cancel_contract":{"id":TYPE_INT}
 }
+const OPTIONAL = {"construct":{"tile":TYPE_INT},"accept_offer":{"duration":TYPE_INT}}
 static func decode(bytes: PackedByteArray) -> Dictionary:
 	var result: Dictionary = Decoder.new().decode(bytes)
 	if result.error == "": result.error = validate(result.value)
@@ -54,10 +53,10 @@ static func validate(m: Dictionary) -> String:
 
 static func payload_error(kind: String, p: Dictionary) -> String:
 	if not PAYLOADS.has(kind): return "invalid_command_kind"
-	if not shape(p,PAYLOADS[kind],{"tile":TYPE_INT} if kind == "construct" else {}): return "invalid_payload"
+	if not shape(p,PAYLOADS[kind],OPTIONAL.get(kind,{})): return "invalid_payload"
 	for key in p:
 		if typeof(p[key]) == TYPE_INT and (p[key] < 0 or p[key] > 100000000000): return "invalid_payload"
-	if p.has("tile") and p.tile > 35: return "invalid_payload"
+	if (p.has("tile") and p.tile > 35) or (p.has("duration") and p.duration > 1200): return "invalid_payload"
 	return ""
 
 static func message(kind: String, body: Dictionary = {}) -> Dictionary:

@@ -27,13 +27,14 @@ foundation circular_foundation
 The Foundation above is illustrative; choose an available one on your turn. When `match_started` arrives, commands include:
 
 ```text
-action set_reduce_waste {"enabled":true}
-action construct {"building_type":"recycling_center","tile":6}
+action construct {"building_type":"collection_center","size":"S","tile":6}
 action upgrade {"building_id":0}
-action request_quotes {"type":"electricity","rate":5000000}
+action publish_offer {"type":"electricity","rate":5000000}
+action accept_offer {"id":0,"duration":120}
+action sell_materials {"amount":5000000}
 ```
 
-Affordability, ownership, Development and marketplace eligibility remain engine decisions. Each action prints admission and execution receipts. Views print tick, population, money, Environment and Development; `--json` prints complete filtered messages. `quit` disconnects without stopping a running match.
+Quantities are integer micro-units (5 E = 5000000). Affordability, ownership, prerequisites and marketplace capacity remain engine decisions, and each view's `own_city.build_options` says why a building cannot start. Each action prints admission and execution receipts. Views print tick, population, money, materials, Environment and Satisfaction; `--json` prints complete filtered messages. `quit` disconnects without stopping a running match.
 
 To rejoin during draft or gameplay:
 

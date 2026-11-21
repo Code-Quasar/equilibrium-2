@@ -23,7 +23,7 @@ func draft_view() -> Dictionary:
 	return Protocol.message("draft_state",{"match_id":game.draft.match_id,"order":game.draft.order.duplicate(),"choices":game.draft.choices.duplicate(),"turn_seat":game.draft.order[game.draft.turn] if game.engine == null else -1,"available_foundations":available})
 func view(seat: int) -> Dictionary:
 	var state: Dictionary = game.snapshot()
-	var result: Dictionary = View.project(state,seat)
+	var result: Dictionary = View.project(state,seat,game.engine.build_options(seat))
 	result.merge({"match_id":state.match_id,"tick":state.tick,"view_seq":view_seq})
 	return Protocol.message("player_view",result)
 func step() -> Dictionary:
