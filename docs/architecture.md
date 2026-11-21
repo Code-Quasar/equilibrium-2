@@ -1,33 +1,41 @@
 # Architecture
 
-EQUILIBRIUM is a headless Godot simulation. Production code has no dependency on scenes, rendering, tests or tools.
+EQUILIBRIUM's rules run in a headless Godot simulation with no dependency on scenes, rendering, wall-clock time, the network layer or tests. The multiplayer server hosts that simulation; clients only send intentions and display projections.
 
-## Composition
+## Simulation
 
-`simulation/match.gd` extends the transactional core engine and composes the complete match:
+`simulation/match.gd` is the authoritative match. It loads the ruleset, owns the state and runs each tick as an explicit, ordered list of phases on a candidate copy. The candidate replaces the authoritative state only when every phase and invariant has passed.
 
-- `core/` owns balance loading, state, fixed-point arithmetic, seeded randomness, command envelopes, ordered phases, invariants and canonical serialization.
-- `systems/` owns buildings, finance, municipal/local/regional economy, power, waste, environment, marketplace, events and migration.
-- `interfaces/` owns deterministic Foundation drafting, local sessions and a JSON-lines adapter.
-- `projections/` contains read-only insights derived from snapshots.
+| Path | Owns |
+|---|---|
+| `core/balance.gd` | Loading and validating `config/balance/B2_1.json` into integer micro-units |
+| `core/match_state.gd` | The initial state and the cross-cutting invariants |
+| `core/arithmetic.gd` | Exact fixed-point products, per-second carries and proportional allocation |
+| `core/canonical.gd`, `core/command_envelope.gd`, `core/seeded_random.gd` | Canonical encoding, command envelopes and ordering, the draft RNG |
+| `systems/buildings.gd` | The S/M/L catalogue, prerequisites, construction commands, project completion |
+| `systems/operations.gd` | Municipal budget, funding, electricity allocation, staffing |
+| `systems/production.gd` | Factory and commercial output, material input, emission levy |
+| `systems/waste.gd` | Generation, collection, sorting, recycling, biogas, landfill and the mass ledger |
+| `systems/materials.gd`, `systems/finance.gd` | The material inventory and the cash ledger |
+| `systems/environment.gd`, `systems/satisfaction.gd` | Environment stocks and the Satisfaction score |
+| `systems/events.gd`, `systems/migration.gd` | Regional crises, pairwise migration and final ranking |
+| `systems/market.gd` | Offers, contracts, escrow and settlement |
+| `interfaces/lifecycle.gd` | The Foundation draft that precedes a match |
+| `projections/player_view.gd` | The allowlisted view one seat may see |
 
-Systems register command handlers and phase callbacks during initialization. The engine supplies a candidate state for each tick; only a fully validated tick replaces authoritative state. The pipeline and registered semantic system IDs are serialized, so ordering is part of deterministic compatibility.
+Systems are plain objects holding the configuration. Each phase is a function `(state, context) -> error` that mutates only the candidate state it is given. Commands map to a validator and an executor; the executor revalidates.
 
-## State and ownership
+## Multiplayer
 
-The match owns identity, tick, seed, RNG state, pending commands, city state, ledgers, contracts, events and final results. Each city owns buildings, projects, finance, capacities, resource inventories, environmental stocks and Development peaks. Shared market and migration records use stable integer IDs and ordered arrays.
-
-Buildings own placement, project lifecycle and completion. Finance owns funding and reservations. Economy coordinates staffing and production. Power, waste and environment own their respective transformations. Market owns offers, commitments, settlement and closure. Migration owns conservative regional population movement.
+`server/` hosts one lobby and match per process over WebSocket (`websocket_transport.gd`, `application.gd`). A monotonic scheduler steps one tick per second, and the command gateway turns client actions into engine envelopes and receipts. Bots fill empty seats through the same commands. `shared/` holds the versioned protocol and its strict JSON decoder.
 
 ## Dependency boundaries
 
-Production may depend only on other files under `simulation/` and the live B1 configuration. Tests reuse production systems but never become production dependencies. Tools are adapters or static checks; they contain no authoritative rules.
-
-New transports should use the existing lifecycle, command and snapshot boundaries. New gameplay behavior requires an approved specification/configuration change plus invariant and replay coverage. Avoid alternate rules implementations in clients, projections or test harnesses.
+Production code under `simulation/` depends only on `simulation/` and the live configuration. The server depends on the simulation and `shared/`; tests depend on everything; nothing depends on tests or tools. `tools/check_repository.py` enforces these boundaries statically.
 
 ## Authorities
 
-- [Structural specification](EQUILIBRIUM_SPEC_v1.0.md)
-- [Live numerical configuration](../config/balance/B1.json)
+- [Game specification](specification.md)
+- [Live configuration](../config/balance/B2_1.json)
 - [Deterministic execution](deterministic-execution.md)
 - [Engine interface](engine-interface.md)

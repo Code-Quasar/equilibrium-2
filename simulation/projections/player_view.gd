@@ -1,101 +1,91 @@
 extends RefCounted
-## Recursive network allowlist. No mutable engine reference or internal ledger escapes.
+## What one seat may see. Every field is copied from an explicit allowlist, so no
+## engine reference, carry, escrow handle or rival's private figure can escape.
 const Finance = preload("res://simulation/systems/finance.gd")
 const Migration = preload("res://simulation/systems/migration.gd")
-static func scalar(value: Variant) -> bool:
-	return typeof(value) in [TYPE_NIL,TYPE_BOOL,TYPE_INT,TYPE_STRING]
+const CITY = ["city_id", "foundation", "population", "money_micro", "materials_micro", "street_micro",
+	"mixed_micro", "sorted_micro", "disposal_micro", "air_micro", "landfill_damage_micro", "pressure_micro",
+	"amenity_micro", "environment_micro", "satisfaction_micro", "biogas_pending_micro_E"]
+const BUILDING = ["id", "type", "size", "tile", "status", "enabled", "reactivate_at", "created_tick", "completed_tick"]
+const OPERATION = ["funded", "requested_micro_E", "delivered_micro_E", "power_micro", "workers", "staff_micro",
+	"fraction_micro", "emitted_micro"]
+const PROJECT = ["building_id", "kind", "target_size", "complete_tick", "credits_paid", "materials_paid"]
+const OFFER = ["id", "seller", "type", "rate_micro", "price_micro", "created_tick"]
+const CONTRACT = ["id", "buyer", "seller", "type", "rate_micro", "price_micro", "start_tick", "end_tick", "status"]
+const CONTRACT_DETAIL = ["escrow_micro", "delivered_micro", "paid_micro", "last_delivery_micro", "closed_tick"]
+const RANKING = ["rank", "city_id", "population", "satisfaction_micro", "environment_micro"]
 
-static func pick(source: Dictionary, keys: Array) -> Dictionary:
+static func allowed(value: Variant) -> bool:
+	match typeof(value):
+		TYPE_NIL, TYPE_BOOL, TYPE_INT, TYPE_STRING:
+			return true
+		TYPE_ARRAY:
+			return value.all(func(item): return typeof(item) == TYPE_INT)
+	return false
+
+static func pick(source: Variant, keys: Array) -> Dictionary:
 	var result: Dictionary = {}
-	for key in keys:
-		if source.has(key) and scalar(source[key]): result[key] = source[key]
+	if source is Dictionary:
+		for key in keys:
+			if source.has(key) and allowed(source[key]):
+				result[key] = source[key].duplicate() if source[key] is Array else source[key]
 	return result
 
-static func integers(source: Variant) -> Array:
-	var result: Array = []
-	if typeof(source) != TYPE_ARRAY: return result
-	for value in source:
-		if typeof(value) == TYPE_INT: result.append(value)
-	return result
+static func picks(source: Variant, keys: Array) -> Array:
+	return source.map(func(item): return pick(item, keys)) if source is Array else []
+
+static func scalars(source: Variant) -> Dictionary:
+	return pick(source, source.keys() if source is Dictionary else [])
 
 static func strings(source: Variant) -> Array:
-	var result: Array = []
-	if typeof(source) != TYPE_ARRAY: return result
-	for value in source:
-		if typeof(value) == TYPE_STRING: result.append(value)
-	return result
+	return source.filter(func(item): return typeof(item) == TYPE_STRING) if source is Array else []
 
-static func events(source: Dictionary) -> Dictionary:
-	return {
-		"active":strings(source.get("active",[])),
-		"warnings":strings(source.get("warnings",[])),
-		"interval_start":source.get("interval_start",0) if typeof(source.get("interval_start"))==TYPE_INT else 0
-	}
-
-## What anyone could see looking at a rival city: which buildings stand where,
-## at what level, finished or not. Nothing about money, power, staffing,
-## projects or whether a building is switched off.
-static func skyline(city: Dictionary) -> Array:
-	var result: Array = []
-	for b in city.get("buildings",[]):
-		result.append(pick(b,["type","tile","level","status"]))
-	return result
-
-static func project(state: Dictionary, seat: int) -> Dictionary:
+## options: the engine's build_options for this seat.
+static func project(state: Dictionary, seat: int, options: Dictionary = {}) -> Dictionary:
 	assert(seat >= 0 and seat < 4)
-	var rankings: Array = []
-	for row in Migration.ranking(state):
-		rankings.append(pick(row,["rank","city_id","population","satisfaction_micro","environment_micro","development_micro"]))
-	var public: Dictionary = {"match_id":state.match_id,"tick":state.tick,"phase":state.status,"duration_ticks":1200,"foundations":strings(state.foundations),"rankings":rankings,"events":events(state.event_state)}
+	var rankings: Array = picks(Migration.ranking(state), RANKING)
+	var crisis: Dictionary = state.get("crisis", {})
+	var public: Dictionary = {"match_id": state.match_id, "tick": state.tick, "phase": state.status,
+		"duration_ticks": 1200, "foundations": strings(state.foundations), "rankings": rankings,
+		"crisis": {"announced": strings(crisis.get("announced")), "active": strings(crisis.get("active"))}}
 	var opponents: Array = []
 	for c in state.cities:
 		if c.city_id != seat:
-			var other: Dictionary = pick(c,["city_id","foundation","population","satisfaction_micro","environment_micro","development_micro"])
-			other.buildings = skyline(c)
-			opponents.append(other)
+			var rival: Dictionary = pick(c, ["city_id", "foundation", "population", "satisfaction_micro", "environment_micro"])
+			# A rival's skyline is public; its operation, money and projects are not.
+			rival.buildings = picks(c.buildings, ["type", "size", "tile", "status"])
+			opponents.append(rival)
 	var city: Dictionary = state.cities[seat]
-	var own: Dictionary = pick(city,["city_id","foundation","population","money_micro","materials_micro","uncollected_micro","sorted_micro","environment_micro","air_micro","effective_air_micro","landfill_damage_micro","overflow_micro","satisfaction_micro","development_micro","reduce_waste","policy_active","policy_change_at","previous_biogas_micro_E","disposed_this_tick"])
-	own.uncollected_micro = integers(city.get("uncollected_micro",[]))
-	own.sorted_micro = integers(city.get("sorted_micro",[]))
+	var own: Dictionary = pick(city, CITY)
 	own.available_money_micro = Finance.available(city)
+	own.satisfaction_components_micro = scalars(city.satisfaction_components_micro)
+	own.capacity = scalars(city.capacity)
+	own.employment = scalars(city.employment)
+	own.power = scalars(city.power)
+	own.processing = scalars(city.processing)
+	own.finance = {"tick": scalars(city.finance.tick), "totals": scalars(city.finance.totals),
+		"unpaid_municipal_upkeep_micro": city.finance.unpaid_municipal_upkeep}
+	own.materials = scalars(city.materials)
+	own.waste = {"tick": scalars(city.waste.tick), "totals": scalars(city.waste.totals)}
 	own.buildings = []
-	for b in city.buildings:
-		own.buildings.append(pick(b,["id","type","tile","level","status","created_tick","completed_tick","enabled","funded","operational","power_factor_micro","reactivate_at","money_paid_micro","materials_paid_micro","power_requested_micro_E","power_delivered_micro_E"]))
-	own.projects = []
-	for p in city.project_slots:
-		own.projects.append(null if p == null else pick(p,["building_id","kind","complete_tick","cash_paid","materials_paid"]))
-	own.capacity = pick(city.capacity,["housing","services_micro","potential_jobs","realized_jobs_micro","staffing_micro","generation_micro_E","demand_micro_E","power_status","reliability_micro"])
-	own.electricity = pick(city.electricity,["supply","demand","delivered","unused","shortage","imports","exports","municipal_requested","municipal_delivered","biogas_available"])
-	own.satisfaction_components_micro = pick(city.satisfaction_components_micro,["housing","employment","services","power","environment"])
-	own.waste_totals = pick(city.waste_totals,["collected","recycled","organic_processed"])
-	own.waste_totals.generated_by_source = {}
-	for source in ["household","factory","commerce"]:
-		own.waste_totals.generated_by_source[source] = integers(city.waste_totals.get("generated_by_source",{}).get(source,[]))
-	own.materials_spent_micro = city.finance.materials_spent
-	own.recovered_micro = city.mass_ledger_micro.recovered
-	own.disposed_micro = city.mass_ledger_micro.disposed
-	own.organic_sink_micro = city.mass_ledger_micro.organic_sink
+	for building in city.buildings:
+		var row: Dictionary = pick(building, BUILDING)
+		row.op = pick(building.op, OPERATION)
+		own.buildings.append(row)
+	own.projects = city.projects.map(func(p): return null if p == null else pick(p, PROJECT))
+	own.build_options = {}
+	for kind in options:
+		own.build_options[kind] = scalars(options[kind])
 	own.contracts = []
-	var market: Dictionary = {"offers":[],"requests":[],"contracts":[]}
-	for o in state.offers:
-		if o.status == "open": market.offers.append(pick(o,["id","seller","type","rate","price","status","request_id"]))
-	for r in state.market.requests:
-		if r.status == "open": market.requests.append(pick(r,["id","buyer","type","rate","status","quote_until","select_until"]))
-	for k in state.contracts:
-		var terms: Dictionary = pick(k,["id","buyer","seller","type","rate","price","start_tick","end_tick","status"])
-		if k.status == "active": market.contracts.append(terms.duplicate(true))
-		if seat in [k.buyer,k.seller]:
-			terms.merge(pick(k,["delivered","paid","last_delivery","booking_micro","booking_refunded","closed_tick"]))
-			terms.renewals = integers(k.get("renewals",[]))
-			own.contracts.append(terms)
-	var notifications: Array = []
-	for n in state.market.notifications:
-		for k in state.contracts:
-			if k.id == n.contract and seat in [k.buyer,k.seller]:
-				notifications.append(pick(n,["time","contract","kind","actor","result"]))
+	var market: Dictionary = {"offers": picks(state.market.offers, OFFER), "contracts": []}
+	for k in state.market.contracts:
+		if k.status == "active":
+			market.contracts.append(pick(k, CONTRACT))
+		if seat in [k.buyer, k.seller]:
+			own.contracts.append(pick(k, CONTRACT + CONTRACT_DETAIL))
 	var final: Variant = null
 	if state.final_result != null:
-		final = pick(state.final_result,["duration","canonical_sha256"])
-		final.winners = integers(state.final_result.get("winners",[]))
+		final = pick(state.final_result, ["duration", "canonical_sha256"])
+		final.winners = state.final_result.winners.filter(func(id): return typeof(id) == TYPE_INT)
 		final.rankings = rankings.duplicate(true)
-	return {"public":public,"own_city":own,"opponents":opponents,"marketplace":market,"notifications":notifications,"final_result":final}
+	return {"public": public, "own_city": own, "opponents": opponents, "marketplace": market, "final_result": final}

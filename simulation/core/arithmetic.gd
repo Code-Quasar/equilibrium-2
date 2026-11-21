@@ -1,12 +1,20 @@
 extends RefCounted
+## Exact integer arithmetic for the fixed-point engine.
+## One displayed unit (credit, waste unit, material unit, E, point) is S micro-units,
+## and every fraction is expressed in micro-units of 1.0.
 const S: int = 1000000
+## Carry denominator for "micro-units per minute at a micro fraction" converted to one second.
+const MINUTE: int = 60 * S
 
 static func divi(a: int, b: int) -> int:
 	@warning_ignore("integer_division")
 	var q: int = a / b
 	return q
 
-# Exact nonnegative multiply/divide with an overflow-safe fallback.
+static func ceil_div(a: int, b: int) -> int:
+	return divi(a + b - 1, b)
+
+## Exact nonnegative a*b/d as quotient and remainder, without int64 overflow.
 static func product(a: int, b: int, d: int) -> Dictionary:
 	assert(a >= 0 and b >= 0 and d > 0)
 	if b == 0 or a <= divi(9223372036854775807, b):
@@ -24,7 +32,8 @@ static func product(a: int, b: int, d: int) -> Dictionary:
 			else:
 				r += ar
 		b = divi(b, 2)
-		if b == 0: break
+		if b == 0:
+			break
 		aq *= 2
 		if ar >= d - ar:
 			aq += 1
@@ -36,27 +45,38 @@ static func product(a: int, b: int, d: int) -> Dictionary:
 static func mul(a: int, b: int, d: int = S) -> int:
 	return product(a, b, d).q
 
-static func carried(city: Dictionary, key: String, a: int, b: int, denominator: int) -> int:
-	var value: Dictionary = product(a, b, denominator)
-	var old: Dictionary = city.local_carries.get(key, {"r": 0, "d": denominator})
-	assert(old.d == denominator)
-	value.r += old.r
-	value.q += divi(value.r, denominator)
-	city.local_carries[key] = {"r": value.r % denominator, "d": denominator}
-	return value.q
-
-static func rate(city: Dictionary, key: String, micro_per_minute: int, efficiency: int = S) -> int:
-	return carried(city, key, micro_per_minute, efficiency, 60 * S)
-
-static func efficiency(city: Dictionary, building: Dictionary) -> int:
-	return mul(city.capacity.staffing_micro, building.power_factor_micro) if building.operational else 0
+static func ceil_mul(a: int, b: int, d: int = S) -> int:
+	var p: Dictionary = product(a, b, d)
+	return p.q + (1 if p.r > 0 else 0)
 
 static func total(values: Array) -> int:
 	var result: int = 0
-	for value in values: result += value
+	for value in values:
+		result += value
 	return result
 
-# Weights are also hard per-recipient limits. Input order owns exact remainder ties.
+## floor((a*b + carried remainder)/d); the new remainder is stored under key.
+## Summed over ticks this is exact: no fraction of any flow is ever dropped.
+static func carried(store: Dictionary, key: String, a: int, b: int, d: int) -> int:
+	var p: Dictionary = product(a, b, d)
+	var r: int = p.r + store.get(key, 0)
+	store[key] = r % d
+	return p.q + divi(r, d)
+
+## The value carried() would return, without storing the remainder.
+static func peek(store: Dictionary, key: String, a: int, b: int, d: int) -> int:
+	var p: Dictionary = product(a, b, d)
+	return p.q + divi(p.r + store.get(key, 0), d)
+
+## One second's share of a per-minute micro rate at a micro fraction.
+static func per_tick(store: Dictionary, key: String, rate_per_minute: int, fraction: int = S) -> int:
+	return carried(store, key, rate_per_minute, fraction, MINUTE)
+
+static func peek_tick(store: Dictionary, key: String, rate_per_minute: int, fraction: int = S) -> int:
+	return peek(store, key, rate_per_minute, fraction, MINUTE)
+
+## Splits budget across weights proportionally. Each weight is also a hard cap, and
+## exact remainders go to the largest fractional shares, ties to the earliest index.
 static func allocate(budget: int, weights: Array) -> Array:
 	var sum_weights: int = total(weights)
 	var used: int = mini(budget, sum_weights)
@@ -69,5 +89,6 @@ static func allocate(budget: int, weights: Array) -> Array:
 		assigned += share.q
 		remainders.append({"i": i, "r": share.r})
 	remainders.sort_custom(func(a, b): return a.r > b.r if a.r != b.r else a.i < b.i)
-	for j in range(used - assigned): result[remainders[j].i] += 1
+	for j in range(used - assigned):
+		result[remainders[j].i] += 1
 	return result

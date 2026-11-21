@@ -1,244 +1,260 @@
 extends RefCounted
+## Building catalogue, construction commands and project lifecycle.
+## Tier values are totals: a Medium building has the Medium row's capacities, not
+## Small plus Medium. Prerequisites are completed buildings the city itself owns.
+const A = preload("res://simulation/core/arithmetic.gd")
+const Balance = preload("res://simulation/core/balance.gd")
 const Finance = preload("res://simulation/systems/finance.gd")
-const SCALE: int = 1000000
-var balance: Dictionary
+const Materials = preload("res://simulation/systems/materials.gd")
+const COMMANDS = ["construct", "upgrade", "cancel_project", "demolish", "disable", "enable"]
+const NEXT_SIZE = {"S": "M", "M": "L"}
+var b: Dictionary
 
 func _init(config: Dictionary) -> void:
-	balance = config.duplicate(true)
+	b = config
 
-func record(id: int, kind: String, city_id: int, tile: int, tick: int, complete: bool) -> Dictionary:
-	return {"id": id, "type": kind, "owner_city": city_id, "tile": tile,
-		"level": 1, "status": "complete" if complete else "constructing", "created_tick": tick,
-		"completed_tick": tick if complete else -1, "enabled": true, "reactivate_at": 0,
-		"funded": false, "operational": false, "productive": false, "power_factor_micro": null,
-		"money_paid_micro": 0, "materials_paid_micro": 0, "upkeep_carry": 0, "income_carry": 0,
-		"eligible_ticks": 0, "funded_ticks": 0, "operational_ticks": 0, "productive_ticks": 0,
-		"funding_failures": 0}
+static func record(id: int, kind: String, size: String, tile: int, tick: int, complete: bool) -> Dictionary:
+	return {"id": id, "type": kind, "size": size, "tile": tile,
+		"status": "complete" if complete else "constructing", "enabled": true, "reactivate_at": 0,
+		"created_tick": tick, "completed_tick": tick if complete else -1,
+		"op": idle(), "carries": {}}
 
-func effects(building: Dictionary) -> Dictionary:
-	var definition: Dictionary = balance.buildings[building.type]
-	var result: Dictionary = definition.l1.duplicate()
-	if building.level == 2:
-		for key in result:
-			if key not in ["cost_micro", "duration_seconds"]:
-				result[key] += definition.upgrade_delta[key]
-	return result
+## Operation record for a building that does not run this tick.
+static func idle() -> Dictionary:
+	return {"funded": false, "requested_micro_E": 0, "delivered_micro_E": 0, "power_micro": 0,
+		"workers": 0, "staff_micro": 0, "fraction_micro": 0, "emitted_micro": 0, "budget_micro": 0}
 
-static func find_building(city: Dictionary, id: int) -> Dictionary:
+func tier(building: Dictionary) -> Dictionary:
+	return b.buildings[building.type][building.size]
+
+## Complete, enabled buildings whose upkeep was paid this tick.
+static func operating(building: Dictionary) -> bool:
+	return building.op.funded
+
+static func find(city: Dictionary, id: int) -> Dictionary:
 	for building in city.buildings:
 		if building.id == id:
 			return building
 	return {}
 
 static func project_index(city: Dictionary, id: int) -> int:
-	for i in range(city.project_slots.size()):
-		if city.project_slots[i] != null and city.project_slots[i].building_id == id:
+	for i in range(city.projects.size()):
+		if city.projects[i] != null and city.projects[i].building_id == id:
 			return i
 	return -1
 
+## Buildings sorted by a type priority list, then by plot. Unlisted types go last.
+static func ordered(city: Dictionary, priority: Array) -> Array:
+	var result: Array = city.buildings.duplicate()
+	result.sort_custom(func(x, y):
+		var px: int = priority.find(x.type)
+		var py: int = priority.find(y.type)
+		px = priority.size() if px < 0 else px
+		py = priority.size() if py < 0 else py
+		return px < py if px != py else x.tile < y.tile)
+	return result
+
+static func by_tile(city: Dictionary, kind: String) -> Array:
+	var result: Array = city.buildings.filter(func(x): return x.type == kind)
+	result.sort_custom(func(x, y): return x.tile < y.tile)
+	return result
+
 func next_tile(city: Dictionary) -> int:
-	var occupied: Array = []
-	for building in city.buildings:
-		occupied.append(building.tile)
-	# Cosmetic row-major fallback; explicit tiles use the same occupancy validation.
-	for tile in range(balance.grid_width * balance.grid_height):
+	var occupied: Array = city.buildings.map(func(x): return x.tile)
+	for tile in range(b.tiles):
 		if tile not in occupied:
 			return tile
 	return -1
 
-func quote(city: Dictionary, cost: int) -> Dictionary:
-	@warning_ignore("integer_division")
-	var materials: int = mini(city.materials_micro, cost * balance.economy.material_discount_percent / 100)
-	return {"cash": cost - materials, "materials": materials}
+## "" when every required type has a completed building owned by this city.
+func prerequisite_error(city: Dictionary, kind: String) -> String:
+	for required in b.buildings[kind].requires:
+		var states: Array = city.buildings.filter(func(x): return x.type == required).map(func(x): return x.status)
+		if "complete" not in states:
+			return "prerequisite_under_construction" if "constructing" in states else "requires_" + required
+	return ""
 
-func validate_command(state: Dictionary, command: Dictionary) -> String:
+## Nominal housing from the municipal baseline and enabled, completed districts.
+func enabled_housing(city: Dictionary) -> int:
+	var housing: int = b.city.housing
+	for building in city.buildings:
+		if building.status == "complete" and building.enabled:
+			housing += tier(building).housing
+	return housing
+
+func validate(state: Dictionary, command: Dictionary) -> String:
 	var city: Dictionary = state.cities[command.player_id]
 	var p: Dictionary = command.payload
 	var kind: String = command.command_type
-	if kind == "set_reduce_waste":
-		if p.size() != 1 or typeof(p.get("enabled")) != TYPE_BOOL:
-			return "invalid_payload"
-		if p.enabled == city.reduce_waste:
-			return "already_set"
-		return "policy_cooldown" if state.tick < city.policy_change_at else ""
-	if (kind != "construct" and p.size() != 1) or (kind == "construct" and (p.size() < 1 or p.size() > 2 or (p.size() == 2 and not p.has("tile")))):
-		return "invalid_payload"
-	var building: Dictionary = {}
-	var price: int = 0
-	var duration: int = 0
 	if kind == "construct":
-		if typeof(p.get("building_type")) != TYPE_STRING or not balance.buildings.has(p.building_type):
-			return "invalid_building_type"
-		if p.has("tile"):
-			if state.scope != "complete":return "invalid_payload"
-			if typeof(p.tile) != TYPE_INT or p.tile < 0 or p.tile >= balance.grid_width * balance.grid_height:
-				return "invalid_tile"
-			for occupied in city.buildings:
-				if occupied.tile == p.tile:return "tile_occupied"
-		var definition: Dictionary = balance.buildings[p.building_type]
-		if city.development_micro < definition.build_unlock_micro:
-			return "development_locked"
-		if next_tile(city) < 0:
-			return "no_free_tile"
-		price = definition.l1.cost_micro
-		duration = definition.l1.duration_seconds
-	else:
-		if typeof(p.get("building_id")) != TYPE_INT:
+		if not p.has("building_type") or not p.has("size") or p.size() > (3 if p.has("tile") else 2):
 			return "invalid_payload"
-		building = find_building(city, p.building_id)
-		if building.is_empty():
-			return "building_not_owned"
-		if kind == "cancel_project":
-			return "" if project_index(city, building.id) >= 0 else "no_active_project"
-		if building.status != "complete":
-			return "not_complete"
-		if kind == "upgrade":
-			if building.level != 1:
-				return "maximum_level"
+		if typeof(p.building_type) != TYPE_STRING or not b.buildings.has(p.building_type):
+			return "invalid_building_type"
+		if typeof(p.size) != TYPE_STRING or p.size not in Balance.SIZES:
+			return "invalid_size"
+		if p.has("tile"):
+			if typeof(p.tile) != TYPE_INT or p.tile < 0 or p.tile >= b.tiles:
+				return "invalid_tile"
+			if city.buildings.any(func(x): return x.tile == p.tile):
+				return "tile_occupied"
+		elif next_tile(city) < 0:
+			return "no_free_tile"
+		var error: String = prerequisite_error(city, p.building_type)
+		if not error.is_empty():
+			return error
+		var t: Dictionary = b.buildings[p.building_type][p.size]
+		return _project_error(state, city, t.credits, t.materials, t.seconds)
+	if p.size() != 1 or typeof(p.get("building_id")) != TYPE_INT:
+		return "invalid_payload"
+	var building: Dictionary = find(city, p.building_id)
+	if building.is_empty():
+		return "building_not_owned"
+	if kind == "cancel_project":
+		return "" if project_index(city, building.id) >= 0 else "no_active_project"
+	if building.status != "complete":
+		return "not_complete"
+	match kind:
+		"upgrade":
+			if not NEXT_SIZE.has(building.size):
+				return "maximum_size"
 			if project_index(city, building.id) >= 0:
 				return "already_upgrading"
-			var definition: Dictionary = balance.buildings[building.type]
-			if city.development_micro < definition.upgrade_unlock_micro:
-				return "development_locked"
-			price = definition.upgrade_delta.cost_micro
-			duration = definition.upgrade_delta.duration_seconds
-		elif kind == "disable":
+			var up: Dictionary = b.buildings[building.type][NEXT_SIZE[building.size]].upgrade
+			return _project_error(state, city, up.credits, up.materials, up.seconds)
+		"demolish":
+			if project_index(city, building.id) >= 0:
+				return "cancel_project_first"
+			if _sole_prerequisite(city, building):
+				return "dependent_buildings_exist"
+			if building.enabled and enabled_housing(city) - tier(building).housing < city.population:
+				return "housing_below_population"
+			return ""
+		"disable":
 			return "" if building.enabled else "already_disabled"
-		elif kind == "enable":
+		"enable":
 			if building.enabled:
 				return "already_enabled"
 			return "reactivation_cooldown" if state.tick < building.reactivate_at else ""
-		elif kind == "demolish":
-			if project_index(city, building.id) >= 0:
-				return "cancel_project_first"
-			# Contract reservations must be resolved before demolition.
-			if state.scope != "complete" and (not city.contract_reservations.is_empty() or not city.incoming_contract_ids.is_empty() or not city.outgoing_contract_ids.is_empty()):
-				return "contract_validation_required"
-			return ""
-		else:
-			return "unsupported_command"
-	if null not in city.project_slots:
-		return "construction_slots_full"
-	if state.tick + duration >= balance.match_seconds:
-		return "not_enough_time"
-	return "" if Finance.available(city) >= quote(city, price).cash else "insufficient_funds"
+	return "unsupported_command"
 
-func execute_command(state: Dictionary, command: Dictionary, _rng: RefCounted) -> String:
-	# Execution revalidates against the current authoritative state.
-	var error: String = validate_command(state, command)
+func _project_error(state: Dictionary, city: Dictionary, credits: int, materials: int, seconds: int) -> String:
+	if null not in city.projects:
+		return "construction_slots_full"
+	if state.tick + seconds >= b.duration:
+		return "not_enough_time"
+	if Finance.available(city) < credits + Materials.purchase_cost(city, b, materials):
+		return "insufficient_funds"
+	return ""
+
+## True when demolishing this building would leave a dependent without its prerequisite.
+func _sole_prerequisite(city: Dictionary, building: Dictionary) -> bool:
+	var others: int = city.buildings.filter(func(x): return x.type == building.type and x.status == "complete" and x.id != building.id).size()
+	if others > 0:
+		return false
+	for other in city.buildings:
+		if building.type in b.buildings[other.type].requires:
+			return true
+	return false
+
+## Execution revalidates against the authoritative state, so a rejected command
+## never charges credits, consumes materials, takes a plot or occupies a slot.
+func execute(state: Dictionary, command: Dictionary) -> String:
+	var error: String = validate(state, command)
 	if not error.is_empty():
 		return error
 	var city: Dictionary = state.cities[command.player_id]
 	var p: Dictionary = command.payload
-	var kind: String = command.command_type
-	if kind == "set_reduce_waste":
-		city["reduce_waste"] = p.enabled
-		city["policy_change_at"] = state.tick + balance.economy.policy_cooldown_seconds
-		return ""
-	if kind in ["construct", "upgrade"]:
-		var building: Dictionary
-		var definition: Dictionary
-		if kind == "construct":
-			building = record(city.next_building_id, p.building_type, city.city_id, p.get("tile", next_tile(city)), state.tick, false)
+	match command.command_type:
+		"construct":
+			var t: Dictionary = b.buildings[p.building_type][p.size]
+			var building: Dictionary = record(city.next_building_id, p.building_type, p.size, p.get("tile", next_tile(city)), state.tick, false)
 			city.next_building_id += 1
 			city.buildings.append(building)
-			definition = balance.buildings[p.building_type].l1
-		else:
-			building = find_building(city, p.building_id)
-			definition = balance.buildings[building.type].upgrade_delta
-		var payment: Dictionary = quote(city, definition.cost_micro)
-		if not Finance.debit(city, payment.cash, "construction", building.id):
-			return "insufficient_funds"
-		city.materials_micro -= payment.materials
-		city.finance.materials_spent += payment.materials
-		building.money_paid_micro += payment.cash
-		building.materials_paid_micro += payment.materials
-		var slot: int = city.project_slots.find(null)
-		city.project_slots[slot] = {"building_id": building.id, "kind": kind,
-			"complete_tick": state.tick + definition.duration_seconds,
-			"cash_paid": payment.cash, "materials_paid": payment.materials}
-		return ""
-	var building: Dictionary = find_building(city, p.building_id)
-	match kind:
-		"disable":
-			building.enabled = false
-			building.funded = false
-			building.operational = false
-			building.productive = false
-			building.reactivate_at = state.tick + balance.economy.reactivation_cooldown_seconds
-		"enable":
-			building.enabled = true
-		"demolish":
-			city.buildings.erase(building)
+			return _start_project(state, city, building.id, "construct", p.size, t.credits, t.materials, t.seconds)
+		"upgrade":
+			var building: Dictionary = find(city, p.building_id)
+			var target: String = NEXT_SIZE[building.size]
+			var up: Dictionary = b.buildings[building.type][target].upgrade
+			return _start_project(state, city, building.id, "upgrade", target, up.credits, up.materials, up.seconds)
 		"cancel_project":
-			var index: int = project_index(city, building.id)
-			var project: Dictionary = city.project_slots[index]
-			@warning_ignore("integer_division")
-			var refund: int = project.cash_paid * balance.economy.cancel_refund_percent / 100
-			Finance.credit(city, refund, "refunds", building.id)
-			city.project_slots[index] = null
+			var index: int = project_index(city, p.building_id)
+			var project: Dictionary = city.projects[index]
+			Finance.credit(city, A.mul(project.credits_paid, b.construction.cancel_refund), "refunds")
+			Materials.refund(city, A.mul(project.materials_paid, b.construction.cancel_materials_refund))
+			city.projects[index] = null
 			if project.kind == "construct":
-				city.buildings.erase(building)
+				city.buildings.erase(find(city, p.building_id))
+		"demolish":
+			var building: Dictionary = find(city, p.building_id)
+			Finance.credit(city, A.mul(tier(building).credits, b.construction.demolition_refund), "refunds")
+			city.buildings.erase(building)
+		"disable":
+			var building: Dictionary = find(city, p.building_id)
+			building.enabled = false
+			building.op = idle()
+			building.reactivate_at = state.tick + b.construction.reactivation_cooldown
+		"enable":
+			find(city, p.building_id).enabled = true
 	return ""
 
-func complete_projects(state: Dictionary, _ctx: Dictionary, _rng: RefCounted) -> String:
+## Credits and materials are paid in full at acceptance. A failure here makes the
+## engine discard the whole command.
+func _start_project(state: Dictionary, city: Dictionary, id: int, kind: String, size: String, credits: int, materials: int, seconds: int) -> String:
+	if not Finance.debit(city, credits, "construction") or not Materials.consume(city, b, materials):
+		return "insufficient_funds"
+	city.projects[city.projects.find(null)] = {"building_id": id, "kind": kind, "target_size": size,
+		"complete_tick": state.tick + seconds, "credits_paid": credits, "materials_paid": materials}
+	return ""
+
+## Phase: projects due at this tick finish and operate from this tick onward.
+func complete_projects(state: Dictionary, _ctx: Dictionary) -> String:
 	for city in state.cities:
-		city.finance.last_tick.clear()
-		for building in city.buildings:
-			building.funded = false
-			building.operational = false
-			building.productive = false
-			building.power_factor_micro = null
-		# Building ID order is stable even when slot indices are reused.
-		var due: Array = []
-		for project in city.project_slots:
-			if project != null and project.complete_tick == state.tick:
-				due.append(project)
-		due.sort_custom(func(a, b): return a.building_id < b.building_id)
+		var due: Array = city.projects.filter(func(x): return x != null and x.complete_tick == state.tick)
+		due.sort_custom(func(x, y): return x.building_id < y.building_id)
 		for project in due:
-			var building: Dictionary = find_building(city, project.building_id)
+			var building: Dictionary = find(city, project.building_id)
+			building.size = project.target_size
 			if project.kind == "construct":
 				building.status = "complete"
 				building.completed_tick = state.tick
-			else:
-				building.level = 2
-			city.project_slots[project_index(city, building.id)] = null
+			city.projects[project_index(city, building.id)] = null
 	return ""
 
 func validate_city(city: Dictionary) -> String:
 	var ids: Array = []
 	var tiles: Array = []
 	for building in city.buildings:
-		if not balance.buildings.has(building.type) or building.owner_city != city.city_id or building.id in ids or building.id < 0 or building.id >= city.next_building_id:
-			return "building_identity"
-		if building.tile in tiles or building.tile < 0 or building.tile >= balance.grid_width * balance.grid_height:
-			return "occupied_or_invalid_tile"
-		if building.level not in [1, 2] or building.status not in ["complete", "constructing"]:
+		if not b.buildings.has(building.type) or building.size not in Balance.SIZES or building.status not in ["complete", "constructing"]:
 			return "building_state"
-		if building.funded and (not building.enabled or building.status != "complete"):
-			return "ineligible_funding"
-		var powered: bool = typeof(building.power_factor_micro) == TYPE_INT and building.power_factor_micro > 0 and building.power_factor_micro <= SCALE
-		if not city.get("resource_systems_enabled", false):
-			powered = building.power_factor_micro == SCALE
-		if building.operational and (not building.funded or not powered):
-			return "unfunded_or_unpowered_operation"
-		if building.productive and (not building.operational or effects(building).income_micro_per_minute == 0):
-			return "invalid_production"
-		if building.upkeep_carry < 0 or building.upkeep_carry >= 60 or building.income_carry < 0 or building.income_carry >= 60 * SCALE:
-			return "invalid_building_carry"
+		if building.id in ids or building.id < 0 or building.id >= city.next_building_id:
+			return "building_identity"
+		if building.tile in tiles or building.tile < 0 or building.tile >= b.tiles:
+			return "occupied_or_invalid_tile"
+		if building.op.funded and (building.status != "complete" or not building.enabled):
+			return "ineligible_operation"
+		for carry in building.carries.values():
+			if typeof(carry) != TYPE_INT or carry < 0:
+				return "invalid_carry"
+		if not prerequisite_error(city, building.type).is_empty():
+			return "prerequisite_chain_broken"
 		ids.append(building.id)
 		tiles.append(building.tile)
-	var projects: Array = []
-	for project in city.project_slots:
+	if city.projects.size() != b.construction.slots:
+		return "construction_bounds"
+	var projected: Array = []
+	for project in city.projects:
 		if project == null:
 			continue
-		if project.building_id not in ids or project.building_id in projects or project.complete_tick >= balance.match_seconds:
+		var building: Dictionary = find(city, project.building_id)
+		if building.is_empty() or project.building_id in projected or project.complete_tick >= b.duration:
 			return "invalid_project"
-		var building: Dictionary = find_building(city, project.building_id)
-		if (project.kind == "construct" and building.status != "constructing") or (project.kind == "upgrade" and (building.status != "complete" or building.level != 1)):
+		var valid: bool = building.status == "constructing" and project.target_size == building.size if project.kind == "construct" \
+			else building.status == "complete" and NEXT_SIZE.get(building.size) == project.target_size
+		if not valid:
 			return "invalid_project_state"
-		projects.append(project.building_id)
+		projected.append(project.building_id)
 	for building in city.buildings:
-		if building.status == "constructing" and building.id not in projects:
+		if building.status == "constructing" and building.id not in projected:
 			return "orphan_construction"
 	return ""

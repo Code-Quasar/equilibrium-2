@@ -66,26 +66,26 @@ func run_occupancy(humans: int) -> void:
 		safety += 1
 	check(app.phase=="running" and app.match_session.bots.size()==4-humans,"occupancy %d" % humans)
 	for id in range(1,humans+1):
-		app.request(id,message("submit_action",{"action_id":"policy","kind":"set_reduce_waste","payload":{"enabled":true}}),0)
+		app.request(id,message("submit_action",{"action_id":"build","kind":"construct","payload":{"building_type":"park","size":"S"}}),0)
 	app.advance(1000)
 	check(app.match_session.game.snapshot().tick==1,"one tick")
 	var state: Dictionary = app.match_session.game.snapshot()
 	check(state.cities.reduce(func(total,c):return total+c.population,0)==4000,"population")
 	for seat in range(humans):
-		check(state.cities[seat].reduce_waste,"human action")
+		check(state.cities[seat].buildings.any(func(b): return b.type=="park"),"human action")
 		var before: String = app.match_session.game.engine.serialize()
 		var v: Dictionary = View.project(state,seat)
 		check(app.match_session.game.engine.serialize()==before,"view pure")
 		for other in v.opponents: check(not other.has("money_micro") and not other.has("materials_micro"),"private opponents")
 		for other in v.opponents:
-			for b in other.buildings: check(b.keys().all(func(k): return k in ["type","tile","level","status"]),"opponent skyline is public only")
+			for b in other.buildings: check(b.keys().all(func(k): return k in ["type","size","tile","status"]),"opponent skyline is public only")
 		var serialized: String = Protocol.Canonical.encode(v)
-		for key in ["rng_state","fingerprint","command_results","last_command_seq","pending_commands","rate_carries","reserved","ledger","rejoin_token"]:
+		for key in ["fingerprint","command_results","last_command_seq","pending_commands","carries","reserved","fee_remainder","rejoin_token"]:
 			check(not serialized.contains('"'+key+'"'),"no "+key)
 	for seat in app.match_session.bots:
 		check(state.cities[seat].buildings.any(func(b):return b.type=="commercial_district"),"bot construction")
 	var prior_count: int = state.command_results.size()
-	app.request(1,message("submit_action",{"action_id":"policy","kind":"set_reduce_waste","payload":{"enabled":true}}),1001)
+	app.request(1,message("submit_action",{"action_id":"build","kind":"construct","payload":{"building_type":"park","size":"S"}}),1001)
 	check(app.match_session.game.snapshot().command_results.size()==prior_count,"idempotent")
 
 func determinism_and_market() -> void:
@@ -99,7 +99,7 @@ func determinism_and_market() -> void:
 			var card: String = m.draft_view().available_foundations[0]
 			m.gateway.issue(seat,"draft","select_foundation",{"foundation":card})
 		var order: Array = [3,2,1,0] if reverse else [0,1,2,3]
-		for seat in order: m.gateway.issue(seat,"policy","set_reduce_waste",{"enabled":true})
+		for seat in order: m.gateway.issue(seat,"build","construct",{"building_type":"park","size":"S"})
 		for i in range(5): check(m.step().status == "advanced","deterministic step")
 		matches.append(m)
 	check(matches[0].game.engine.serialize() == matches[1].game.engine.serialize(),"reversed arrival identical canonical hash")
@@ -107,13 +107,12 @@ func determinism_and_market() -> void:
 	var state: Dictionary = m.game.snapshot()
 	var energy: int = state.foundations.find("energy_pioneer")
 	var outsider: int = (energy+1)%4
-	var price: int = m.game.Sim.Balance.load_b1().market.prices.electricity.standard
-	m.gateway.issue(energy,"offer","publish_offer",{"type":"electricity","rate":1000000,"price":price})
+	m.gateway.issue(energy,"offer","publish_offer",{"type":"electricity","rate":1000000})
 	check(m.step().status=="advanced","offer tick")
 	state = m.game.snapshot()
-	check(not state.offers.is_empty(),"real offer created")
-	if not state.offers.is_empty():
-		m.gateway.issue(outsider,"steal","withdraw_offer",{"id":state.offers[0].id})
+	check(not state.market.offers.is_empty(),"real offer created")
+	if not state.market.offers.is_empty():
+		m.gateway.issue(outsider,"steal","withdraw_offer",{"id":state.market.offers[0].id})
 		var result: Dictionary = m.step()
 		check(result.deliveries.any(func(d): return d.message.status=="offer_not_owned"),"market ownership enforced")
 	var session = preload("res://server/session_registry.gd").new()
@@ -130,30 +129,27 @@ func projection_is_recursive() -> void:
 		m.gateway.issue(seat,"draft-"+str(seat),"select_foundation",{"foundation":m.draft_view().available_foundations[0]})
 	check(m.step().status=="advanced","projection fixture tick")
 	var state: Dictionary = m.game.snapshot()
-	state.event_state.active.append({"secret":"event-internal"})
-	state.event_state.warnings.append({"secret":"warning-internal"})
-	state.offers.append({"id":90,"seller":1,"type":{"secret":"offer-internal"},"rate":1,"price":1,"status":"open","request_id":-1,"debug":true})
-	state.market.requests.append({"id":91,"buyer":0,"type":{"secret":"request-internal"},"rate":1,"status":"open","quote_until":2,"select_until":3,"debug":true})
-	state.contracts.append({"id":92,"buyer":0,"seller":1,"type":{"secret":"contract-internal"},"rate":1,"price":1,"start_tick":0,"end_tick":90,"status":"active","delivered":1,"paid":1,"last_delivery":1,"booking_micro":1,"booking_refunded":false,"renewals":[0,{"secret":"renewal-internal"}],"private":true})
-	state.market.notifications.append({"time":1,"contract":92,"kind":"expiry_warning","result":{"secret":"notification-internal"},"participants":[0,1]})
+	state.crisis.active.append({"secret":"event-internal"})
+	state.crisis.announced.append({"secret":"warning-internal"})
+	state.market.offers.append({"id":90,"seller":1,"type":{"secret":"offer-internal"},"rate_micro":1,"price_micro":1,"created_tick":0,"debug":true})
+	state.market.contracts.append({"id":92,"buyer":0,"seller":1,"type":"electricity","rate_micro":1,"price_micro":1,"start_tick":0,"end_tick":90,"status":"active",
+		"escrow_micro":1,"delivered_micro":1,"paid_micro":1,"fee_remainder":0,"last_delivery_micro":1,"closed_tick":-1,"carries":{"secret":"contract-internal"},"private":true})
 	state.cities[0].capacity.housing = {"secret":"city-internal"}
-	state.cities[1].buildings.append({"id":99,"type":"factory","tile":35,"level":1,"status":"complete","enabled":false,"funded":false,"power_factor_micro":1,"money_paid_micro":{"secret":"building-internal"}})
+	state.cities[0].carries["leak"] = 7
+	state.cities[1].buildings.append({"id":99,"type":"factory","size":"S","tile":35,"status":"complete","enabled":false,"op":{"secret":"building-internal"},"carries":{"secret":"building-internal"}})
 	for seat in range(4):
 		var view: Dictionary = View.project(state,seat)
 		var encoded: String = Protocol.Canonical.encode(view)
-		for secret in ["event-internal","warning-internal","offer-internal","request-internal","contract-internal","renewal-internal","notification-internal","city-internal","debug","private","participants"]:
+		for secret in ["event-internal","warning-internal","offer-internal","contract-internal","city-internal","building-internal","debug","private","fee_remainder","leak"]:
 			check(not encoded.contains(secret),"nested projection hides "+secret)
-		check(not encoded.contains("building-internal"),"rival building internals hidden")
 		if seat != 1:
 			var rival: Dictionary = view.opponents.filter(func(o): return o.city_id==1)[0]
 			var visible: Array = rival.buildings.filter(func(b): return b.tile==35)
-			check(visible.size()==1 and visible[0].keys().size()==4 and not visible[0].has("enabled") and not visible[0].has("power_factor_micro"),"rival skyline: type, tile, level, status only")
-		check(view.public.events.active.size() == state.event_state.active.size()-1,"public active events retained")
+			check(visible.size()==1 and visible[0].keys().size()==4 and not visible[0].has("enabled") and not visible[0].has("op"),"rival skyline: type, size, tile, status only")
+		check(view.public.crisis.active.size() == state.crisis.active.size()-1,"public active crises retained")
 		check(view.marketplace.offers.any(func(o): return o.id==90),"public offers retained")
-		check(view.marketplace.requests.any(func(r): return r.id==91),"public requests retained")
-		check(view.marketplace.contracts.any(func(k): return k.id==92),"public contract terms retained")
-		check(view.notifications.size()==(1 if seat in [0,1] else 0),"participant notification scope")
-		if seat in [0,1]: check(view.own_city.contracts[0].delivered==1,"participant contract detail retained")
+		check(view.marketplace.contracts.any(func(k): return k.id==92 and not k.has("delivered_micro") and not k.has("escrow_micro")),"public contract terms only")
+		check(view.own_city.contracts.any(func(k): return k.id==92 and k.delivered_micro==1) == (seat in [0,1]),"contract detail only for participants")
 
 func create_drafting_app(now: int = 0) -> Dictionary:
 	var app = App.new()

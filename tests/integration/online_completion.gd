@@ -15,7 +15,7 @@ func _initialize() -> void:
 	while app.phase == "draft":
 		var d: Dictionary = app.match_session.draft_view()
 		send(app,"choose_foundation",{"action_id":"draft","foundation":d.available_foundations[0]})
-	send(app,"submit_action",{"action_id":"policy","kind":"set_reduce_waste","payload":{"enabled":true}})
+	send(app,"submit_action",{"action_id":"build","kind":"construct","payload":{"building_type":"park","size":"S"}})
 	var previous: int = 0
 	for tick in range(1,1201):
 		app.outbox.clear()

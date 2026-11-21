@@ -1,82 +1,54 @@
 # EQUILIBRIUM
 
-### Deterministic Circular-Economy Strategy Game
+### Deterministic circular-economy strategy game
 
-EQUILIBRIUM is a monorepo for a four-city online-first strategy game. Its authoritative Godot simulation, WebSocket server and network terminal client support private four-city matches with one to four humans and bots in vacant seats.
+Four cities compete for one region of 4,000 residents over a 20-minute match. Each city builds housing, jobs, services and power, and turns its waste into materials and energy through a Collection → Sorting → Recycling chain. Residents move toward the most satisfying cities, and the city with the most residents at the end wins.
 
-Over a fixed 1,200-second match, cities compete for a conserved regional population by developing housing, employment and services while managing electricity, waste, pollution, municipal finances and inter-city contracts.
-
-Population moves at deterministic migration intervals according to Satisfaction, housing capacity and regional movement limits. Satisfaction derives from employment, housing, public services, electricity reliability and Environment. Construction, circular processing, energy supply and marketplace commitments therefore affect the same population-based victory objective through explicit economic and environmental consequences.
+Satisfaction combines Environment, employment, housing, power reliability and public services. Every economic choice reaches the same objective through it: what a city builds, how it treats its waste, how it powers itself and what it trades with rivals.
 
 ## Features
 
-- Fixed one-second ticks and seeded deterministic command ordering.
-- Transactional command validation and atomic tick commits.
-- Four distinct Foundations and eleven upgradeable building types.
-- Municipal finance, staffing, construction slots and fixed-point accounting.
-- Electricity allocation, waste collection, recycling, biogas and landfill systems.
-- Environmental stocks, Satisfaction, Development, migration and final ranking.
-- Waste-treatment and electricity contracts with reservations, settlement and refunds.
-- Canonical serialization, read-only projections and deterministic replay coverage.
-- Headless execution and stable local lifecycle/JSON-lines interfaces.
-
-## Architecture
-
-Godot 4.5.1 runs the authoritative simulation without scenes, rendering or wall-clock dependencies.
-
-- `simulation/core/` owns state, fixed-point arithmetic, seeded randomness, command admission, transactional execution and canonical serialization.
-- `simulation/systems/` owns construction, finance, economy, power, waste, environment, marketplace, events and migration.
-- `simulation/interfaces/` exposes Foundation drafting, local sessions and a versioned JSON-lines adapter.
-- `simulation/projections/` contains read-only derived insights.
-- `simulation/match.gd` composes the complete production engine.
-- `server/` hosts the authoritative multiplayer runtime.
-- `shared/` defines the versioned WebSocket JSON protocol.
-- `client/terminal/` contains the minimal network CLI.
-
-See [architecture](docs/architecture.md) and [deterministic execution](docs/deterministic-execution.md).
+- Fixed one-second ticks, seeded command ordering, atomic commands and transactional ticks.
+- Twelve building types in Small, Medium and Large tiers, with hard Collection → Sorting → Recycling/Biogas prerequisites.
+- Progressive valorization: Collection salvages some recyclables, Sorting reuses more, Recycling recovers the most, and each unit counts once.
+- A physical waste ledger, one material inventory, priced inputs, landfill fees and an emissions levy.
+- Staffing, prioritized electricity, biogas power, Environment stocks and pairwise Satisfaction-driven migration.
+- Four Foundations, four announced regional crises and fixed-price electricity and treatment contracts with escrow.
+- An authoritative WebSocket server with lobby, draft, reconnection, bots and per-seat views.
 
 ## Requirements
 
-- Godot 4.5.1
-- Python 3.9 or later for the static repository checker and optional network terminal client
+- Godot 4.7.2
+- Python 3.9 or later for the static checker, the terminal client and the socket tests
 
-The engine and repository checker need no Python packages. The optional terminal client requires the pinned dependency in `client/terminal/requirements.txt`.
+## Run
 
-## Run headlessly
-
-From the repository root, run a complete match with the default seed:
-
-```sh
-godot --headless --path . --script simulation/headless_runner.gd
-```
-
-The runner accepts an optional integer seed and tick count from 0 through 1200:
+A complete match with demonstration Foundations and no commands, printing the canonical state:
 
 ```sh
 godot --headless --path . --script simulation/headless_runner.gd -- 42 1200
 ```
 
-It prints the canonical serialized state. The runner uses an explicit demonstration Foundation assignment; lifecycle drafting is available through the engine interface.
+To host a multiplayer match, see the [server](server/README.md).
 
-## Engine integration
+## Layout
 
-Integrators can instantiate `simulation/match.gd` directly and use its initialization, command, stepping, snapshot and serialization boundary. `simulation/interfaces/lifecycle.gd` adds deterministic unique-Foundation drafting. `simulation/interfaces/local_protocol.gd` provides a local JSON-lines protocol through `tools/local_match.gd`.
+- `simulation/` — the authoritative engine (see [architecture](docs/architecture.md))
+- `config/balance/B2_1.json` — the live ruleset numbers
+- `server/` — the WebSocket match host
+- `shared/` — protocol v1 and its schema
+- `client/` — terminal and graphical clients
+- `tests/`, `tools/` — test suites and static checks
 
-See [engine interface](docs/engine-interface.md) for envelopes, operations and state ownership.
+## Documentation
 
-## Configuration
-
-[B1.json](config/balance/B1.json) is the only live numerical balance configuration. The [structural specification](docs/EQUILIBRIUM_SPEC_v1.0.md) defines binding game rules. Do not duplicate either authority in application code or documentation.
+- [Game specification](docs/specification.md) — the rules the engine implements
+- [Architecture](docs/architecture.md), [deterministic execution](docs/deterministic-execution.md), [engine interface](docs/engine-interface.md)
+- [Testing](docs/testing.md)
 
 ## Testing
 
 ```sh
-godot --headless --path . --log-file /tmp/equilibrium-tests.log --script tests/run_all.gd
+godot --headless --path . --script tests/run_all.gd
 python3 tools/check_repository.py
 ```
-
-The Godot entry point runs production regression suites, opening checks and five independent-process 1,200-tick replay comparisons. The Python checker performs static resource, dependency-boundary, UID, documentation-link and B1-structure checks. See [testing](docs/testing.md) for focused commands.
-
-## Scope
-
-The existing simulation is the only gameplay authority. See [server operation](server/README.md) and [terminal client](client/terminal/README.md) for multiplayer launch commands. Graphical rendering, Android packaging, public hosting and process-crash persistence remain outside the implementation.
