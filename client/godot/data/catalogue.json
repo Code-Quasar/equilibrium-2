@@ -610,6 +610,7 @@
   "interval": 20,
   "last": 1180
  },
+ "ruleset": "B2.1",
  "services_slack": 1.15,
  "source": "config/balance/B2_1.json",
  "source_sha256": "60221a06de3d91fd6e552bb82ff4fd5491fab77bd289bca9755676190f7b1c8f"

@@ -58,7 +58,7 @@ var _panel: PanelContainer
 var _panel_title: Label
 var _body: VBoxContainer
 var _drawer: PanelContainer
-var _drawer_cards := {}           # building type -> {button, price, thumb}
+var _drawer_cards := {}           # building type -> {button, price, buy, thumb}
 var _size_buttons := {}           # size -> its button in the build bar
 var _activity: VBoxContainer
 var _banner: PanelContainer
@@ -270,7 +270,7 @@ func _build() -> void:
 	_drawer.offset_left = 10
 	_drawer.offset_right = -110
 	_drawer.offset_bottom = -8
-	_drawer.offset_top = -236
+	_drawer.offset_top = -254
 	_drawer.visible = false
 	add_child(_drawer)
 	_blockers.append(_drawer)
@@ -354,6 +354,10 @@ func _drawer_card(t: String) -> Control:
 	var price := UI.label("", "Small")
 	price.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(price)
+	# What the materials not in stock add: construction buys the shortfall.
+	var buy := UI.label("", "Small")
+	buy.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(buy)
 	var b := UI.button("Place", "PrimaryButton", "", func(): start_placing(t))
 	b.custom_minimum_size = Vector2(0, 34)
 	b.add_theme_font_size_override("font_size", 13)
@@ -362,7 +366,7 @@ func _drawer_card(t: String) -> Control:
 	card.mouse_filter = Control.MOUSE_FILTER_PASS
 	card.gui_input.connect(func(e): _card_input(e, t, not b.disabled))
 	thumb.gui_input.connect(func(e): _card_input(e, t, not b.disabled))
-	_drawer_cards[t] = {"button": b, "price": price, "thumb": thumb}
+	_drawer_cards[t] = {"button": b, "price": price, "buy": buy, "thumb": thumb}
 	return card
 
 
@@ -394,15 +398,27 @@ func _set_build_size(size: String) -> void:
 
 ## Prices and locks update in place, so a card being pressed is never rebuilt
 ## under the finger. Whether a building can start comes from the server's own
-## check in the last view; the figures are the exported catalogue's.
+## check in the last view; the figures are the exported catalogue's. Until the
+## first view arrives every card waits.
 func _drawer_refresh() -> void:
 	var options: Dictionary = own().get("build_options", {})
+	var stock := float(own().get("materials_micro", 0)) / Catalogue.MICRO
+	var buy_price := float(Catalogue.data().get("materials", {}).get("buy_price", 0))
 	for t in _drawer_cards:
 		var tier := Catalogue.tier(t, build_size)
-		var why := str(options.get(t, {}).get(build_size, "unknown"))
 		var c: Dictionary = _drawer_cards[t]
 		var b: Button = c["button"]
-		c["price"].text = Catalogue.price_text(float(tier.get("construction_credits", 0)), float(tier.get("construction_materials", 0)), int(tier.get("construction_seconds", 0)))
+		var need := float(tier.get("construction_materials", 0))
+		c["price"].text = Catalogue.price_text(float(tier.get("construction_credits", 0)), need, int(tier.get("construction_seconds", 0)))
+		var short := maxf(0.0, need - stock)
+		c["buy"].text = "buys %s mat: +💰 %s" % [Catalogue.fmt(ceilf(short)), Catalogue.fmt(ceilf(short * buy_price))] if short > 0.0 else "materials in stock"
+		var known: Dictionary = options.get(t, {})
+		if not known.has(build_size):
+			b.disabled = true
+			b.text = "…"
+			b.tooltip_text = ""
+			continue
+		var why := str(known[build_size])
 		b.disabled = why != ""
 		b.text = "Place" if why == "" else LOCKS.get(why, "Not now")
 		b.tooltip_text = "" if why == "" else (Catalogue.error_text(why) if Catalogue.error_text(why) != "" else why.replace("_", " "))

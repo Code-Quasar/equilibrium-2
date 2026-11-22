@@ -22,6 +22,7 @@ OUT = os.path.join(HERE, "..", "data", "catalogue.json")
 raw = open(SOURCE, "rb").read()
 b = json.loads(raw)
 out = {
+    "ruleset": b["version"],
     "source": "config/balance/B2_1.json",
     "source_sha256": hashlib.sha256(raw).hexdigest(),
     "match_seconds": b["match"]["duration_seconds"],

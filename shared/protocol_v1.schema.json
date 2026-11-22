@@ -876,6 +876,10 @@
               "type": "string",
               "maxLength": 1024
             },
+            "ruleset": {
+              "type": "string",
+              "maxLength": 1024
+            },
             "limits": {
               "type": "object"
             }
@@ -886,6 +890,7 @@
             "correlation_id",
             "connection_id",
             "server_version",
+            "ruleset",
             "limits"
           ],
           "additionalProperties": false
@@ -988,7 +993,7 @@
             },
             "join_code": {
               "type": "string",
-              "maxLength": 1024
+              "pattern": "^[0-9]{4}$"
             }
           },
           "required": [

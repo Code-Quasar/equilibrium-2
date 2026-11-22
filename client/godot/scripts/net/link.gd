@@ -2,7 +2,8 @@ class_name Link
 extends Node
 ## One WebSocket to the authoritative server, speaking protocol v1: one JSON
 ## object per text message, integers only, every request tagged with a
-## correlation id. It performs the hello/welcome handshake and measures how
+## correlation id. It performs the hello/welcome handshake, refuses a server
+## that runs a different ruleset than the client's catalogue, and measures how
 ## long the server takes to answer, for the network diagnostics panel. It
 ## knows nothing about lobbies or games.
 
@@ -107,6 +108,12 @@ func _receive(m: Dictionary) -> void:
 		_sent_at.erase(cid)
 	if not handshaken:
 		if m.get("type") == "welcome":
+			# The client's figures and actions are this ruleset's; a server
+			# running any other would only send views the client misreads.
+			if str(m.get("ruleset", "")) != str(Catalogue.data().get("ruleset", "")):
+				close()
+				closed.emit("ruleset_mismatch")
+				return
 			handshaken = true
 			opened.emit()
 		elif m.get("type") == "protocol_error":

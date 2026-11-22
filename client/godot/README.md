@@ -27,7 +27,7 @@ The server hosts one lobby per process; restart it for another match. To stop it
 
 ```
 touch → screen (scripts/app.gd, scripts/ui/*) → Session.act / intent methods
-      → Link (scripts/net/link.gd): WebSocket, hello/welcome, correlation ids, RTT
+      → Link (scripts/net/link.gd): WebSocket, hello/welcome (refuses a server whose ruleset differs from the catalogue's), correlation ids, RTT
       → server validates and executes → action_ack (admission, execution), player_view every tick
       → Session (scripts/state/session.gd): newest view_seq wins, receipts update actions
       → screens redraw from Session only
@@ -95,4 +95,4 @@ godot --path client/godot --script res://tests/capture.gd -- ws://127.0.0.1:9080
 - **Android:** the APK exports (package `com.equilibrium.client`, INTERNET permission). It has **not** been installed or launched on a device or emulator.
 - **No catalogue message:** protocol v1 has none, so prices come from the exported B2.1 display copy. Which buildings can start comes from the view's `build_options`, one tick old; the server's receipt is the final word.
 - **Not exercised end to end:** a full 20-minute match, a completed trade between two humans, and network play over LAN or 5G.
-- **Join codes:** the server's are 16 hexadecimal characters. Sharing by copy and paste works; typing one is long.
+- **Join codes:** four digits, easy to read out and type. The code field accepts digits only.

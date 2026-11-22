@@ -270,10 +270,21 @@ func _show_menu() -> void:
 	var code := LineEdit.new()
 	code.theme_type_variation = "DarkField"
 	code.text = _typed_code
-	code.placeholder_text = "Join code"
+	code.placeholder_text = "4-digit code"
+	code.max_length = 4
+	code.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER
 	code.custom_minimum_size.y = 50
 	code.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	code.text_changed.connect(func(t: String): _typed_code = t)
+	# Join codes are four digits: anything else typed or pasted is dropped.
+	code.text_changed.connect(func(t: String):
+		var digits := ""
+		for ch in t:
+			if ch >= "0" and ch <= "9":
+				digits += ch
+		if digits != t:
+			code.text = digits
+			code.caret_column = digits.length()
+		_typed_code = digits)
 	var join_now := func():
 		if code.text.strip_edges() == "":
 			toast("Enter the code the host shared", "warn")
@@ -523,7 +534,7 @@ const HOWTO := [
 	["01", "Objective", ["residential_district"], ["people"],
 		"Four cities draw residents from one shared population. When the 20 minutes run out, the city with the most residents wins. Ties go to Satisfaction, then Environment, then cash."],
 	["02", "Build", ["commercial_district", "factory"], ["coin", "timer"],
-		"Open Build, pick Small, Medium or Large and drag a building onto open land. Each costs cash plus materials (any you lack are bought) and takes real seconds to finish; two can be under construction at once. Watch it rise: the bar shows how far along it is. A building can later grow one size at a time and keeps working while it does."],
+		"Open Build, pick Small, Medium or Large and drag a building onto open land. Each costs cash plus materials and takes real seconds to finish; two can be under construction at once. Watch it rise: the bar shows how far along it is. A building can later grow one size at a time and keeps working while it does. Cities start with no materials: construction buys any it lacks for cash, so recovering your own is cheaper."],
 	["03", "Roads", ["residential_district"], ["warning"],
 		"One main road crosses the map and cannot be removed. Draw your own roads for free. A building works only when it touches a road joined to the main road; otherwise it is switched off and shows a road bubble."],
 	["04", "Residents and Satisfaction", ["public_services_center", "park"], ["homes", "jobs"],

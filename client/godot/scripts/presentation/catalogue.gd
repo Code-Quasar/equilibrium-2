@@ -87,6 +87,7 @@ const ERRORS := {
 	"invalid_duration": "Contracts last 1 to 5 minutes",
 	"timeout": "The server did not answer",
 	"refused": "The server refused the connection",
+	"ruleset_mismatch": "That server runs a different version of the game",
 	"bad_address": "That server address is not valid",
 	"connection_lost": "Connection lost",
 	"not_connected": "Not connected",

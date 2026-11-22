@@ -4,6 +4,16 @@ var crypto = Crypto.new()
 var entries: Dictionary = {}
 func token() -> String:
 	return crypto.generate_random_bytes(32).hex_encode()
+## A lobby's join code: four uniformly random decimal digits, easy to read out
+## and type. Values from the top of the 16-bit range are redrawn so every code
+## is equally likely.
+func join_code() -> String:
+	while true:
+		var bytes: PackedByteArray = crypto.generate_random_bytes(2)
+		var value: int = bytes[0] * 256 + bytes[1]
+		if value < 60000:
+			return "%04d" % (value % 10000)
+	return ""
 func create(seat: int, connection: int, lobby: String, now: int) -> String:
 	entries[seat] = {"connection":connection,"lobby_id":lobby,"generation":0}
 	return rotate(seat,now)

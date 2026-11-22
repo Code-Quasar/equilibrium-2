@@ -44,7 +44,11 @@ func run_occupancy(humans: int) -> void:
 	for id in range(1,humans+1):
 		app.connect_peer(id)
 		app.request(id,message("hello",{"client":"test","client_version":"1"}),0)
+		check(app.outbox.any(func(item): return item.connection==id and item.message.type=="welcome" and item.message.get("ruleset","")=="B2.1"),"welcome names the B2.1 ruleset")
 		app.request(id,message("create_lobby") if id==1 else message("join_lobby",{"join_code":app.join_code}),0)
+		if id == 1:
+			var code: String = app.outbox.filter(func(item): return item.message.type=="lobby_created")[-1].message.join_code
+			check(RegEx.create_from_string("^[0-9]{4}$").search(code)!=null and code==app.join_code,"join code is four digits")
 		app.request(id,message("set_ready",{"ready":true}),0)
 	app.request(1,message("start_match"),0)
 	check(app.phase=="draft","draft phase")

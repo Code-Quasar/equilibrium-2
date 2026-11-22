@@ -5,6 +5,7 @@ extends RefCounted
 ## ticks, residents, housing, service capacity and job slots.
 const A = preload("res://simulation/core/arithmetic.gd")
 const PATH = "res://config/balance/B2_1.json"
+const VERSION = "B2.1"
 const TYPES = ["residential_district", "factory", "commercial_district", "public_services_center",
 	"park", "collection_center", "sorting_center", "recycling_center", "biogas_facility",
 	"landfill", "fossil_power_plant", "renewable_power_plant"]
@@ -203,7 +204,7 @@ class Reader:
 				fail("unknown_field_" + label + "." + str(key))
 
 	func build(raw: Dictionary) -> Dictionary:
-		if raw.get("version") != "B2.1":
+		if raw.get("version") != VERSION:
 			fail("unsupported_version")
 		var game: Dictionary = section(raw, "match")
 		var world: Dictionary = section(raw, "world")
@@ -223,7 +224,7 @@ class Reader:
 		if number(game, "tick_seconds", COUNT) != 1:
 			fail("unsupported_tick_seconds")
 		var c: Dictionary = {
-			"version": "B2.1",
+			"version": VERSION,
 			"players": number(game, "players", COUNT),
 			"duration": number(game, "duration_seconds", COUNT),
 			"residents": number(game, "total_residents", COUNT),

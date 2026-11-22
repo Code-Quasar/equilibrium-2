@@ -166,6 +166,14 @@ func _on_closed(reason: String) -> void:
 	var was_live := live
 	live = false
 	changed.emit("link")
+	if reason == "ruleset_mismatch":
+		# No seat on that server can be played by this client: stop rejoining.
+		notice.emit("%s (%s). Connect to a server of this version." % [Catalogue.error_text(reason), server_url], "bad")
+		_reset_room()
+		_forget_seat()
+		phase = "menu"
+		changed.emit("phase")
+		return
 	if phase in ["draft", "play"] and has_saved_seat():
 		# The seat is reserved: keep the last authoritative view on screen,
 		# marked stale, and try to rejoin.

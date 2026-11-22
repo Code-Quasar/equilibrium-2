@@ -4,6 +4,7 @@ const Protocol = preload("res://shared/protocol_v1.gd")
 const Sessions = preload("res://server/session_registry.gd")
 const MatchSession = preload("res://server/match_session.gd")
 const Bots = preload("res://server/bot_controller.gd")
+const Balance = preload("res://simulation/core/balance.gd")
 var sessions = Sessions.new()
 var connections: Dictionary = {}
 var seats: Array = [null,null,null,null]
@@ -36,7 +37,7 @@ func request(id: int, m: Dictionary, now: int) -> void:
 	if m.type == "hello":
 		if connections[id]: reject(id,m,"already_negotiated"); return
 		connections[id] = true
-		emit(id,"welcome",{"correlation_id":m.correlation_id,"connection_id":str(id),"server_version":"1.0","limits":{"message_bytes":32768,"messages_per_second":20}})
+		emit(id,"welcome",{"correlation_id":m.correlation_id,"connection_id":str(id),"server_version":"1.0","ruleset":Balance.VERSION,"limits":{"message_bytes":32768,"messages_per_second":20}})
 		return
 	if not connections[id]: reject(id,m,"hello_required"); return
 	var seat: int = sessions.seat_for(id)
@@ -67,7 +68,7 @@ func request(id: int, m: Dictionary, now: int) -> void:
 		if m.type == "create_lobby":
 			if lobby_id != "": reject(id,m,"lobby_exists"); return
 			lobby_id = sessions.token().substr(0,24)
-			join_code = sessions.token().substr(0,16)
+			join_code = sessions.join_code()
 			lobby_expires = now+1800000
 		elif lobby_id == "" or now >= lobby_expires or m.join_code != join_code:
 			reject(id,m,"invalid_join_code"); return
