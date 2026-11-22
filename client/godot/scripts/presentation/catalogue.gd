@@ -64,6 +64,7 @@ const ERRORS := {
 	"already_disabled": "Already off",
 	"building_not_owned": "Not your building",
 	"invalid_join_code": "No open lobby with that code",
+	"city_eliminated": "Your city is out of resources and can no longer act",
 	"city_name_taken": "Another player already took that city name",
 	"invalid_city_name": "City names use 2–20 letters, digits, spaces, ' or -",
 	"lobby_full": "That lobby is full",
@@ -144,6 +145,108 @@ static func requires(t: String) -> Array:
 ## Credits, materials and seconds as one short line, e.g. "💰 125 + 9 mat · ⏱ 0:25".
 static func price_text(credits: float, materials: float, seconds: int) -> String:
 	return "💰 %s + %s mat · ⏱ %s" % [fmt(credits), fmt(materials), clock(seconds)]
+
+
+## The six city metrics a building changes, for the build bar and placement:
+## [key, badge, name]. Values come from impact().
+const METRICS := [
+	["housing", "homes", "Housing"],
+	["jobs", "jobs", "Jobs"],
+	["power", "power", "Electricity"],
+	["pollution", "pollution", "Pollution"],
+	["resources", "materials", "Resources"],
+	["money", "coin", "Money"],
+]
+
+
+## What building t at size does to each metric, as {key: [short text, tone]}:
+## tone 1 helps the city, -1 costs it, 0 neutral; text "_" when it does not apply.
+## Figures are the exported B2.1 tier; the server decides every real outcome.
+static func impact(t: String, size: String) -> Dictionary:
+	var x := tier(t, size)
+	var f := func(key: String) -> float: return float(x.get(key, 0))
+	var out := {}
+	out["housing"] = ["+%s homes" % fmt(f.call("housing_capacity")), 1] if f.call("housing_capacity") > 0 else ["_", 0]
+	out["jobs"] = ["+%s jobs" % fmt(f.call("job_slots")), 1] if f.call("job_slots") > 0 else ["_", 0]
+	if f.call("power_generated_capacity") > 0:
+		out["power"] = ["+%s" % fmt(f.call("power_generated_capacity")), 1]
+	elif t == "biogas_facility":
+		out["power"] = ["−%s, makes up to +%s" % [fmt(f.call("power_demand_capacity")), fmt(f.call("biogas_organic_waste_per_min") * f.call("biogas_energy_capacity_per_organic_unit_per_min"))], 1]
+	elif f.call("power_demand_capacity") > 0:
+		out["power"] = ["−%s" % fmt(f.call("power_demand_capacity")), -1]
+	else:
+		out["power"] = ["_", 0]
+	var bits := []
+	var tone := 0
+	if f.call("air_emissions_points_per_min") > 0:
+		bits.append("+%s air/min" % _dec(f.call("air_emissions_points_per_min")))
+		tone = -1
+	if f.call("air_cleanup_points_per_min") > 0:
+		bits.append("cleans %s air/min" % _dec(f.call("air_cleanup_points_per_min")))
+		tone = 1
+	if f.call("waste_generated_per_min") > 0:
+		bits.append("+%s waste/min" % fmt(f.call("waste_generated_per_min")))
+		tone = -1
+	if t == "residential_district":
+		bits.append("+%s waste/min from residents" % _dec(f.call("housing_capacity") * 0.03))
+		tone = -1
+	for k in [["collection_waste_per_min", "collects"], ["sorting_waste_per_min", "sorts"], ["recycling_waste_per_min", "recycles"], ["biogas_organic_waste_per_min", "digests"]]:
+		if f.call(k[0]) > 0:
+			bits.append("%s %s waste/min" % [k[1], fmt(f.call(k[0]))])
+			tone = 1
+	if f.call("landfill_waste_per_min") > 0:
+		bits.append("buries %s waste/min, damages land" % fmt(f.call("landfill_waste_per_min")))
+		tone = -1
+	out["pollution"] = [", ".join(bits), tone] if not bits.is_empty() else ["_", 0]
+	var res := ["−%s to build" % fmt(f.call("construction_materials"))]
+	var rtone := -1
+	if f.call("factory_materials_consumed_per_min") > 0:
+		res.append("−%s/min" % fmt(f.call("factory_materials_consumed_per_min")))
+	if f.call("recycling_waste_per_min") > 0:
+		res.append("+≈%s/min recovered, slows the drain" % fmt(f.call("recycling_waste_per_min") * f.call("material_yield_fraction")))
+		rtone = 1
+	if f.call("sorting_direct_reuse_fraction") > 0 or f.call("collection_direct_reuse_fraction") > 0:
+		res.append("recovers a little")
+	if t == "renewable_power_plant" or t == "biogas_facility":
+		res.append("clean power slows the drain")
+		rtone = 1
+	if t == "fossil_power_plant":
+		res.append("dirty power speeds the drain")
+	if t == "residential_district":
+		res.append("residents draw on it")
+	out["resources"] = [", ".join(res), rtone]
+	var income: float = f.call("gross_income_credits_per_min")
+	var upkeep: float = f.call("maintenance_credits_per_min")
+	var net: float = income - upkeep
+	var m := "−%s now, " % fmt(f.call("construction_credits"))
+	m += ("%s%s/min (+%s income −%s upkeep)" % ["+" if net >= 0 else "−", fmt(absf(net)), fmt(income), fmt(upkeep)]) if income > 0 else "−%s/min upkeep" % fmt(upkeep)
+	out["money"] = [m, 1 if net > 0 else -1]
+	# Short forms for the narrow build cards.
+	var short := {
+		"housing": "+%s" % fmt(f.call("housing_capacity")) if f.call("housing_capacity") > 0 else "",
+		"jobs": "+%s" % fmt(f.call("job_slots")) if f.call("job_slots") > 0 else "",
+		"power": str(out["power"][0]).split(",")[0] if out["power"][0] != "_" else "",
+		"pollution": "",
+		"resources": "−%s%s" % [fmt(f.call("construction_materials")), " ↺" if rtone > 0 else ""],
+		"money": "%s%s/min" % ["+" if net >= 0 else "−", fmt(absf(net))],
+	}
+	if f.call("air_emissions_points_per_min") > 0:
+		short["pollution"] = "+%s air" % _dec(f.call("air_emissions_points_per_min"))
+	elif f.call("air_cleanup_points_per_min") > 0:
+		short["pollution"] = "−%s air" % _dec(f.call("air_cleanup_points_per_min"))
+	elif f.call("landfill_waste_per_min") > 0:
+		short["pollution"] = "land damage"
+	elif out["pollution"][1] > 0:
+		short["pollution"] = "−waste"
+	elif out["pollution"][1] < 0:
+		short["pollution"] = "+waste"
+	for k in out:
+		out[k].append(short.get(k, ""))
+	return out
+
+
+static func _dec(x: float) -> String:
+	return String.num(x, 2).trim_suffix("0").trim_suffix(".") if absf(x - round(x)) > 0.001 else fmt(x)
 
 
 static func event_name(id: String) -> String:

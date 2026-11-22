@@ -5,7 +5,7 @@ const Finance = preload("res://simulation/systems/finance.gd")
 const Migration = preload("res://simulation/systems/migration.gd")
 const CITY = ["city_id", "foundation", "population", "money_micro", "materials_micro", "street_micro",
 	"mixed_micro", "sorted_micro", "disposal_micro", "air_micro", "landfill_damage_micro", "pressure_micro",
-	"amenity_micro", "environment_micro", "satisfaction_micro", "biogas_pending_micro_E"]
+	"amenity_micro", "environment_micro", "satisfaction_micro", "biogas_pending_micro_E", "status", "eliminated_tick"]
 const BUILDING = ["id", "type", "size", "tile", "status", "enabled", "reactivate_at", "created_tick", "completed_tick"]
 const OPERATION = ["funded", "requested_micro_E", "delivered_micro_E", "power_micro", "workers", "staff_micro",
 	"fraction_micro", "emitted_micro"]
@@ -13,7 +13,7 @@ const PROJECT = ["building_id", "kind", "target_size", "complete_tick", "credits
 const OFFER = ["id", "seller", "type", "rate_micro", "price_micro", "created_tick"]
 const CONTRACT = ["id", "buyer", "seller", "type", "rate_micro", "price_micro", "start_tick", "end_tick", "status"]
 const CONTRACT_DETAIL = ["escrow_micro", "delivered_micro", "paid_micro", "last_delivery_micro", "closed_tick"]
-const RANKING = ["rank", "city_id", "population", "satisfaction_micro", "environment_micro"]
+const RANKING = ["rank", "city_id", "eliminated", "population", "satisfaction_micro", "environment_micro"]
 
 static func allowed(value: Variant) -> bool:
 	match typeof(value):
@@ -51,7 +51,7 @@ static func project(state: Dictionary, seat: int, options: Dictionary = {}) -> D
 	var opponents: Array = []
 	for c in state.cities:
 		if c.city_id != seat:
-			var rival: Dictionary = pick(c, ["city_id", "foundation", "population", "satisfaction_micro", "environment_micro"])
+			var rival: Dictionary = pick(c, ["city_id", "foundation", "population", "satisfaction_micro", "environment_micro", "status", "eliminated_tick"])
 			# A rival's skyline is public; its operation, money and projects are not.
 			rival.buildings = picks(c.buildings, ["type", "size", "tile", "status"])
 			opponents.append(rival)
@@ -66,6 +66,9 @@ static func project(state: Dictionary, seat: int, options: Dictionary = {}) -> D
 	own.finance = {"tick": scalars(city.finance.tick), "totals": scalars(city.finance.totals),
 		"unpaid_municipal_upkeep_micro": city.finance.unpaid_municipal_upkeep}
 	own.materials = scalars(city.materials)
+	own.reserve = {"units_micro": city.reserve.units_micro, "initial_micro": city.reserve.initial_micro,
+		"circularity_micro": city.reserve.circularity_micro, "renewable_share_micro": city.reserve.renewable_share_micro,
+		"tick": scalars(city.reserve.tick), "totals": scalars(city.reserve.totals)}
 	own.waste = {"tick": scalars(city.waste.tick), "totals": scalars(city.waste.totals)}
 	own.buildings = []
 	for building in city.buildings:

@@ -34,6 +34,10 @@ func update(state: Dictionary, _ctx: Dictionary) -> String:
 			"power": w.power * city.power.reliability_micro,
 			"services": w.services * mini(A.S, A.mul(services, A.S, w.services_slack * population)),
 		}
+		if city.get("status", "active") == "eliminated":
+			# Out of resources: nobody chooses to live there any more.
+			for key in components:
+				components[key] = 0
 		city.satisfaction_components_micro = components
 		city.satisfaction_micro = clampi(A.total(components.values()), 0, 100 * A.S)
 	return ""

@@ -90,6 +90,8 @@ static func _consistency(c: Dictionary) -> String:
 		return "material_price_arbitrage"
 	if c.economy.landfill_fee <= 0 or c.economy.material_cap <= 0 or c.waste.mixed_cap <= 0 or c.waste.sorted_cap.has(0):
 		return "invalid_economy"
+	if c.reserve.start <= 0 or c.reserve.per_resident <= 0 or c.reserve.max_cut >= A.S:
+		return "invalid_resource_reserve"
 	if c.construction.reactivation_cooldown < 1:
 		return "invalid_reactivation_cooldown"
 	if c.city.air > c.environment.air_cap or c.city.landfill_damage > c.environment.landfill_cap:
@@ -218,6 +220,7 @@ class Reader:
 		var pressure: Dictionary = section(env, "untreated_pressure")
 		var market: Dictionary = section(raw, "market")
 		var prices: Dictionary = section(market, "prices")
+		var reserve: Dictionary = section(raw, "resource_reserve")
 		if not error.is_empty():
 			return {}
 		if number(game, "tick_seconds", COUNT) != 1:
@@ -311,9 +314,18 @@ class Reader:
 					"organic": number(prices, "organic_treatment_credits_per_waste_unit", MICRO),
 				},
 			},
+			"reserve": {
+				"start": number(reserve, "starting_units", MICRO),
+				"per_resident": number(reserve, "draw_per_resident_per_min", MICRO),
+				"per_power": number(reserve, "draw_per_nonrenewable_power_unit_per_min", MICRO),
+				"per_material": number(reserve, "draw_per_purchased_material_unit", MICRO),
+				"max_cut": number(reserve, "max_circularity_cut_fraction", FRACTION),
+			},
 			"buildings": {},
 			"foundations": {},
 		}
+		exact_keys(reserve, ["starting_units", "draw_per_resident_per_min", "draw_per_nonrenewable_power_unit_per_min",
+			"draw_per_purchased_material_unit", "max_circularity_cut_fraction"], "resource_reserve")
 		for source in SOURCES:
 			var mix: Dictionary = section(waste, SOURCES[source])
 			c.waste.composition[source] = []

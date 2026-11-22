@@ -132,6 +132,13 @@
       "organic_treatment_credits_per_waste_unit": 0.7
     }
   },
+  "resource_reserve": {
+    "starting_units": 650,
+    "draw_per_resident_per_min": 0.012,
+    "draw_per_nonrenewable_power_unit_per_min": 0.08,
+    "draw_per_purchased_material_unit": 1,
+    "max_circularity_cut_fraction": 0.75
+  },
   "buildings": {
     "residential_district": {
       "required_completed_buildings": [],

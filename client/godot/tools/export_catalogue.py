@@ -40,6 +40,7 @@ out = {
     "foundations": {k: {"buildings": [{"type": s["id"], "size": s["tier"]} for s in v["starting_buildings"]],
                         "cash": v["starting_cash_credits"]} for k, v in b["foundations"].items()},
     "buildings": b["buildings"],
+    "reserve": b["resource_reserve"],
     "crises": [{k: c[k] for k in ("id", "announce_tick", "start_tick", "end_tick_exclusive")} for c in b["crises"]],
     "market": {
         "prices": {"electricity": b["market"]["prices"]["electricity_credits_per_capacity_minute"],

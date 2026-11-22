@@ -17,6 +17,7 @@ const Materials = preload("res://simulation/systems/materials.gd")
 const Migration = preload("res://simulation/systems/migration.gd")
 const Operations = preload("res://simulation/systems/operations.gd")
 const Production = preload("res://simulation/systems/production.gd")
+const Reserve = preload("res://simulation/systems/reserve.gd")
 const Satisfaction = preload("res://simulation/systems/satisfaction.gd")
 const Waste = preload("res://simulation/systems/waste.gd")
 
@@ -27,6 +28,7 @@ var environment: RefCounted
 var production: RefCounted
 var satisfaction: RefCounted
 var market: RefCounted
+var reserve: RefCounted
 var _balance: Dictionary = {}
 var _state: Dictionary = {}
 var _pending: Array = []
@@ -48,6 +50,7 @@ func initialize(match_id: String, seed_value: int, foundations: Array) -> String
 	production = Production.new(b, buildings, waste)
 	environment = EnvironmentSystem.new(b, buildings)
 	satisfaction = Satisfaction.new(b, buildings, operations)
+	reserve = Reserve.new(b, buildings)
 	for kind in Buildings.COMMANDS:
 		_commands[kind] = [buildings.validate, buildings.execute]
 	for kind in Market.COMMANDS:
@@ -69,6 +72,7 @@ func initialize(match_id: String, seed_value: int, foundations: Array) -> String
 		["local_treatment", waste.treat_local],
 		["landfill", waste.landfill],
 		["material_overflow", _sell_overflow],
+		["resource_reserve", reserve.draw],
 		["environment", environment.update],
 		["satisfaction", satisfaction.update],
 		["migration", _migrate],
@@ -102,6 +106,8 @@ func preview(player_id: int, kind: String, payload: Dictionary) -> String:
 		return "invalid_player"
 	if not _commands.has(kind):
 		return "unsupported_command"
+	if Reserve.eliminated(_state.cities[player_id]):
+		return "city_eliminated"
 	return _commands[kind][0].call(snapshot(), {"player_id": player_id, "command_type": kind, "payload": payload.duplicate(true)})
 
 ## Why each building type and size can or cannot be started now ("" = allowed).
@@ -111,7 +117,7 @@ func build_options(player_id: int) -> Dictionary:
 		result[kind] = {}
 		for size in Balance.SIZES:
 			var command: Dictionary = {"player_id": player_id, "command_type": "construct", "payload": {"building_type": kind, "size": size}}
-			result[kind][size] = "match_closed" if _state.status == "finished" else buildings.validate(_state, command)
+			result[kind][size] = "match_closed" if _state.status == "finished" else ("city_eliminated" if Reserve.eliminated(_state.cities[player_id]) else buildings.validate(_state, command))
 	return result
 
 func submit(raw: Variant, authenticated_player: int) -> Dictionary:
@@ -180,7 +186,9 @@ func step(validate_each_phase: bool = true) -> Dictionary:
 func _execute(state: Dictionary, command: Dictionary) -> Dictionary:
 	var candidate: Dictionary = state.duplicate(true)
 	var error: String = "unsupported_command"
-	if _commands.has(command.command_type):
+	if Reserve.eliminated(state.cities[command.player_id]):
+		error = "city_eliminated"
+	elif _commands.has(command.command_type):
 		var handler: Array = _commands[command.command_type]
 		error = handler[0].call(candidate.duplicate(true), command.duplicate(true))
 		if error.is_empty():

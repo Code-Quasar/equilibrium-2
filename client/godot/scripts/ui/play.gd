@@ -69,6 +69,9 @@ var _rank_label: Label
 var _need_chips := {}             # need key -> HudCard
 var _cash: HudCard
 var _mats: HudCard
+var _reserve: HudCard
+var _reserve_warned := 100            # last warning threshold shown, in %
+var _out_panel: PanelContainer        # shown once the city is eliminated
 var _timer: HudCard
 var _net: Label
 var _diag: Label
@@ -176,7 +179,13 @@ func _build() -> void:
 	_timer.custom_minimum_size.x = 112
 	_timer.tapped.connect(func(): toast.call("The match lasts 20 minutes. Crises are announced a minute ahead.", "info"))
 	_timer.held.connect(func(): _details("time", _timer))
+	_reserve = HudCard.new("materials", "Resources", true)
+	_reserve.custom_minimum_size.x = 124
+	_reserve.tapped.connect(func(): toast.call("Your city's natural resources only go down. Renewable power and good recycling slow the drain. At zero your city is out of the game.", "info"))
+	_reserve.held.connect(func(): _details("reserve", _reserve))
+	_mats.caption.text = "MATERIALS"
 	tr.add_child(_cash)
+	tr.add_child(_reserve)
 	tr.add_child(_mats)
 	tr.add_child(_timer)
 	var right := UI.vbox(4, [tr])
@@ -233,6 +242,7 @@ func _build() -> void:
 	br.add_child(UI.round_button("btn_orange", "road", "Roads", func(): _open(""); road_mode("draw")))
 	br.add_child(UI.round_button("btn_green", "plus", "Build", func(): _open("" if tab == "build" else "build"), 72))
 	_blockers.append(_corner(Control.PRESET_BOTTOM_RIGHT, 14, 10, br))
+	br.set_meta("builds", true)
 	_own_controls.append(br)
 
 	# Visiting a rival: who it is, and the way home.
@@ -270,7 +280,7 @@ func _build() -> void:
 	_drawer.offset_left = 10
 	_drawer.offset_right = -110
 	_drawer.offset_bottom = -8
-	_drawer.offset_top = -236
+	_drawer.offset_top = -330
 	_drawer.visible = false
 	add_child(_drawer)
 	_blockers.append(_drawer)
@@ -354,6 +364,13 @@ func _drawer_card(t: String) -> Control:
 	var price := UI.label("", "Small")
 	price.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(price)
+	# What it changes, metric by metric (relevant ones only).
+	var effects := GridContainer.new()
+	effects.columns = 2
+	effects.add_theme_constant_override("h_separation", 6)
+	effects.add_theme_constant_override("v_separation", 0)
+	effects.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(effects)
 	var b := UI.button("Place", "PrimaryButton", "", func(): start_placing(t))
 	b.custom_minimum_size = Vector2(0, 34)
 	b.add_theme_font_size_override("font_size", 13)
@@ -362,7 +379,7 @@ func _drawer_card(t: String) -> Control:
 	card.mouse_filter = Control.MOUSE_FILTER_PASS
 	card.gui_input.connect(func(e): _card_input(e, t, not b.disabled))
 	thumb.gui_input.connect(func(e): _card_input(e, t, not b.disabled))
-	_drawer_cards[t] = {"button": b, "price": price, "thumb": thumb}
+	_drawer_cards[t] = {"button": b, "price": price, "thumb": thumb, "effects": effects}
 	return card
 
 
@@ -403,9 +420,32 @@ func _drawer_refresh() -> void:
 		var c: Dictionary = _drawer_cards[t]
 		var b: Button = c["button"]
 		c["price"].text = Catalogue.price_text(float(tier.get("construction_credits", 0)), float(tier.get("construction_materials", 0)), int(tier.get("construction_seconds", 0)))
+		_fill_effects(c["effects"], Catalogue.impact(t, build_size), true)
 		b.disabled = why != ""
 		b.text = "Place" if why == "" else LOCKS.get(why, "Not now")
 		b.tooltip_text = "" if why == "" else (Catalogue.error_text(why) if Catalogue.error_text(why) != "" else why.replace("_", " "))
+
+
+## Impact rows: badge, then the change. Compact rows show only what applies.
+func _fill_effects(grid: GridContainer, impact: Dictionary, compact: bool) -> void:
+	UI.clear(grid)
+	for m in Catalogue.METRICS:
+		var row: Array = impact.get(m[0], ["_", 0, ""])
+		var text: String = str(row[2]) if compact else str(row[0])
+		if compact and text == "":
+			continue
+		var icon := UI.badge(m[1], 16 if compact else 20)
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		grid.add_child(icon)
+		var l := UI.label(text if compact else "%s: %s" % [m[2], text], "Small", not compact)
+		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		l.add_theme_font_override("font", UI.number_font())
+		l.add_theme_font_size_override("font_size", 11 if compact else 12)
+		var tone := int(row[1])
+		l.add_theme_color_override("font_color", UI.PRIMARY_DARK if tone > 0 else (UI.DANGER_DARK if tone < 0 else UI.MUTED))
+		if not compact:
+			l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		grid.add_child(l)
 
 
 ## Tests only: put the camera back after an input check.
@@ -524,7 +564,7 @@ func _hud_refresh() -> void:
 	var o := own()
 	var t := tick()
 	if _hist.is_empty() or int(_hist[-1][0]) != t:
-		_hist.append([t, int(o.get("money_micro", 0)), int(o.get("population", 0)), int(o.get("materials_micro", 0))])
+		_hist.append([t, int(o.get("money_micro", 0)), int(o.get("population", 0)), int(o.get("materials_micro", 0)), int(o.get("reserve", {}).get("units_micro", 0))])
 		if _hist.size() > 90:
 			_hist.pop_front()
 	var evaluated: bool = o.get("satisfaction_micro") != null
@@ -532,8 +572,13 @@ func _hud_refresh() -> void:
 	_gauge.value = sat
 	_pop_card.set_value("%s%s" % [Catalogue.fmt(o.get("population", 0)), ("  %+d" % _pop_delta) if _pop_delta != 0 else ""])
 	_rank_label.text = "   Rank #%d of 4" % _rank()
-	var net := _per_minute(1)
-	_cash.set_value(Catalogue.micro(o.get("available_money_micro", 0)), "bad" if net < 0 and float(o.get("available_money_micro", 0)) < -net * Catalogue.MICRO else "")
+	# Money: the balance, and the running change per minute from the server's
+	# own ledger for the last second (income minus upkeep and running costs).
+	var flow := cash_flow()
+	var cash := float(o.get("available_money_micro", 0)) / Catalogue.MICRO
+	_cash.set_value(Catalogue.fmt(cash), "bad" if flow < 0 and cash < -flow * 2 else ("warn" if flow < 0 else ""))
+	_cash.set_caption("%s%s /MIN" % ["+" if flow >= 0 else "−", Catalogue.fmt(absf(flow))], 1 if flow > 0 else (-1 if flow < 0 else 0))
+	_reserve_refresh(o)
 	_mats.set_value(Catalogue.micro(o.get("materials_micro", 0)))
 	var left := int(v().get("public", {}).get("duration_ticks", 1200)) - t
 	_timer.set_value(Catalogue.clock(left), "bad" if left <= 60 else "")
@@ -609,6 +654,98 @@ func _per_minute(i: int) -> float:
 	if dt <= 0:
 		return 0.0
 	return float(int(last[i]) - int(first[i])) / dt * 60.0 / (Catalogue.MICRO if i != 2 else 1.0)
+
+
+const INCOME := ["taxes", "building_income", "contract_income", "material_sales"]
+const RUNNING := ["municipal_upkeep", "building_upkeep", "standby_upkeep", "emissions_levy", "landfill_fees", "contract_payments"]
+
+
+## Credits per minute: last second's income minus running costs (construction
+## and one-off material purchases excluded), from the server's ledger.
+func cash_flow() -> float:
+	var t: Dictionary = own().get("finance", {}).get("tick", {})
+	var n := 0.0
+	for k in INCOME:
+		n += float(t.get(k, 0))
+	for k in RUNNING:
+		n -= float(t.get(k, 0))
+	return n * 60.0 / Catalogue.MICRO
+
+
+## The natural-resource reserve: stock, its fall per minute, warnings, and
+## the end of the game for this city at zero.
+func _reserve_refresh(o: Dictionary) -> void:
+	var r: Dictionary = o.get("reserve", {})
+	if r.is_empty():
+		_reserve.visible = false
+		return
+	var units := float(r.get("units_micro", 0)) / Catalogue.MICRO
+	var start := maxf(float(r.get("initial_micro", 1)) / Catalogue.MICRO, 1.0)
+	var pct := int(units / start * 100.0)
+	var drain := steady_drain()
+	_reserve.set_value(Catalogue.fmt(units), "ok" if pct > 50 else ("warn" if pct > 25 else "bad"))
+	_reserve.set_caption("%s /MIN" % ("−" + String.num(drain, 1) if drain > 0.05 else "0"), -1 if drain > 0.05 else 0)
+	for threshold in [50, 25, 10]:
+		if pct <= threshold and _reserve_warned > threshold and str(o.get("status", "active")) != "eliminated":
+			_reserve_warned = threshold
+			toast.call("Resources at %d %%. Renewable power and better recycling slow the drain; at zero your city is out." % pct, "warn" if threshold > 10 else "bad")
+			_reserve.pulse()
+			if UI.music:
+				UI.music.alert("warning")
+	_eliminated_refresh(o)
+
+
+## Resources lost per minute to residents and non-renewable power, from the
+## server's last second (bought materials come on top, when you build).
+func steady_drain() -> float:
+	var rt: Dictionary = own().get("reserve", {}).get("tick", {})
+	return (float(rt.get("residents", 0)) + float(rt.get("power", 0))) * 60.0 / Catalogue.MICRO
+
+
+func eliminated() -> bool:
+	return str(own().get("status", "active")) == "eliminated"
+
+
+## Out of resources: the city can no longer act. The player can watch the rest
+## of the match, visit the other cities, or leave.
+func _eliminated_refresh(o: Dictionary) -> void:
+	var out := eliminated()
+	for c in _own_controls:
+		if c != null and is_instance_valid(c) and c.has_meta("builds"):
+			c.visible = not out and visiting < 0
+	if not out:
+		return
+	if tab == "build":
+		_open("")
+	if not placing.is_empty():
+		_cancel_place()
+	if map.road_mode != "":
+		road_mode("")
+	if _out_panel == null:
+		_out_panel = PanelContainer.new()
+		_out_panel.add_theme_stylebox_override("panel", UI.box(Color(0.08, 0.05, 0.06, 0.92), 18, Color("#ff7a66"), 2, 0, Color(), 16))
+		_out_panel.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+		_out_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		_out_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+		_out_panel.offset_top = -96
+		_out_panel.offset_bottom = -96
+		var col := UI.vbox(8)
+		var title := UI.label("Your city ran out of resources", "OnDarkTitle")
+		title.add_theme_color_override("font_color", Color("#ff9c8a"))
+		col.add_child(title)
+		var when := int(o.get("eliminated_tick", 0))
+		col.add_child(UI.label("Eliminated at %s. You can no longer build or trade; you can watch the rest of the match and visit the other cities." % Catalogue.clock(when), "OnDark", true))
+		var row := UI.hbox(8)
+		row.add_child(UI.button("Visit the others", "GhostButton", "region", func(): _open("rivals")))
+		row.add_child(UI.button("Leave the match", "DangerButton", "close", func(): session.leave()))
+		col.add_child(row)
+		col.custom_minimum_size.x = 520
+		_out_panel.add_child(col)
+		add_child(_out_panel)
+		_blockers.append(_out_panel)
+		if UI.music:
+			UI.music.alert("crisis")
+	_out_panel.visible = visiting < 0
 
 
 func _diag_refresh() -> void:
@@ -744,11 +881,37 @@ func _detail_rows(key: String) -> Array:
 			var held := int(o.get("money_micro", 0)) - int(o.get("available_money_micro", 0))
 			if held > 0:
 				rows4.append(["Held in contract escrow", Catalogue.micro(held, 1)])
-			rows4.append(["Net over the last minute", n[0], n[1]])
+			var ft: Dictionary = o.get("finance", {}).get("tick", {})
+			var per := func(keys: Array) -> float:
+				var x := 0.0
+				for k in keys:
+					x += float(ft.get(k, 0))
+				return x * 60.0 / Catalogue.MICRO
+			var flow := cash_flow()
+			rows4.append(["Income per minute", "+" + Catalogue.fmt(per.call(INCOME)), good])
+			rows4.append(["Upkeep and running costs", "−" + Catalogue.fmt(per.call(RUNNING)), bad])
+			rows4.append(["Change per minute", "%s%s" % ["+" if flow >= 0 else "−", Catalogue.fmt(absf(flow))], good if flow > 0 else (bad if flow < 0 else Color.WHITE)])
+			rows4.append(["Net over the last minute, all in", n[0], n[1]])
 			var unpaid := int(o.get("finance", {}).get("unpaid_municipal_upkeep_micro", 0))
 			if unpaid > 0:
 				rows4.append(["City upkeep left unpaid", Catalogue.micro(unpaid, 1), bad])
 			return rows4
+		"reserve":
+			var r: Dictionary = o.get("reserve", {})
+			var rt: Dictionary = r.get("tick", {})
+			var units := float(r.get("units_micro", 0)) / Catalogue.MICRO
+			var drain := steady_drain()
+			var rows5: Array = ["Resources", ["Left", "%s of %s" % [Catalogue.fmt(units), Catalogue.micro(r.get("initial_micro", 0))]],
+				["Falling by", "%s / min, plus what you buy" % String.num(drain, 1), bad if drain > 0 else Color.WHITE],
+				["  residents", "%s / min" % String.num(float(rt.get("residents", 0)) * 60.0 / Catalogue.MICRO, 1)],
+				["  non-renewable power", "%s / min" % String.num(float(rt.get("power", 0)) * 60.0 / Catalogue.MICRO, 1)],
+				["  bought materials (so far)", Catalogue.micro(r.get("totals", {}).get("materials", 0))],
+				["Clean power share", "%d %%" % int(float(r.get("renewable_share_micro", 0)) / 10000.0)],
+				["Recycling (circularity)", "%d %%" % int(float(r.get("circularity_micro", 0)) / 10000.0)]]
+			if drain > 0.05 and not eliminated():
+				rows5.append(["Runs out in about", Catalogue.clock(int(units / drain * 60.0)), bad if units / drain * 60.0 < 1200 - tick() else Color.WHITE])
+			rows5.append("Renewable plants and Biogas cut the power drain; bigger, newer recycling raises circularity and cuts the residents' drain. At zero your city is eliminated.")
+			return rows5
 		"materials":
 			var m: Array = sg.call(_per_minute(3), " / min")
 			var ml: Dictionary = o.get("materials", {})
@@ -1310,6 +1473,12 @@ func _modebar_refresh() -> void:
 	var tier := Catalogue.tier(type, size)
 	box.add_child(UI.label("%s %s · %s" % [Catalogue.size_name(size), Catalogue.building_name(type), Catalogue.price_text(float(tier.get("construction_credits", 0)),
 		float(tier.get("construction_materials", 0)), int(tier.get("construction_seconds", 0)))], "Value", true))
+	var full := GridContainer.new()
+	full.columns = 2
+	full.add_theme_constant_override("h_separation", 8)
+	full.add_theme_constant_override("v_separation", 2)
+	box.add_child(full)
+	_fill_effects(full, Catalogue.impact(type, size), false)
 	var msg := "Drag it anywhere on open land, then lift your finger to build. Put it beside a road so it works."
 	if not placing.get("ok", false):
 		msg = "Can't build here: %s." % placing.get("why", "")
@@ -1440,7 +1609,12 @@ func _rivals_panel() -> void:
 				f = Catalogue.FOUNDATIONS.get(str(o.get("foundation", "")), [""])[0]
 		if cid == session.seat:
 			f = Catalogue.FOUNDATIONS.get(str(own().get("foundation", "")), [""])[0]
-		box.add_child(UI.hbox(8, [UI.label("#%d %s" % [int(r["rank"]), ("%s (you)" % session.city_name(cid)) if cid == session.seat else session.city_name(cid)], "Value"), UI.spacer(), UI.label("%s residents" % Catalogue.fmt(r["population"]), "Value")]))
+		var head := UI.hbox(8, [UI.label("#%d %s" % [int(r["rank"]), ("%s (you)" % session.city_name(cid)) if cid == session.seat else session.city_name(cid)], "Value")])
+		if r.get("eliminated", false):
+			head.add_child(UI.pill("out of resources", UI.DANGER))
+		head.add_child(UI.spacer())
+		head.add_child(UI.label("%s residents" % Catalogue.fmt(r["population"]), "Value"))
+		box.add_child(head)
 		box.add_child(UI.bar(float(r["population"]) / maxf(total, 1) * 2.0, UI.PEOPLE if cid != session.seat else UI.PRIMARY))
 		var sat: String = Catalogue.micro(r["satisfaction_micro"], 1) if r.get("satisfaction_micro") != null else "–"
 		box.add_child(UI.label("%s · Satisfaction %s · Environment %s" % [f, sat, Catalogue.micro(r.get("environment_micro", 0), 1)], "Small", true))

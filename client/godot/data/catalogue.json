@@ -610,7 +610,14 @@
   "interval": 20,
   "last": 1180
  },
+ "reserve": {
+  "draw_per_nonrenewable_power_unit_per_min": 0.08,
+  "draw_per_purchased_material_unit": 1,
+  "draw_per_resident_per_min": 0.012,
+  "max_circularity_cut_fraction": 0.75,
+  "starting_units": 650
+ },
  "services_slack": 1.15,
  "source": "config/balance/B2_1.json",
- "source_sha256": "60221a06de3d91fd6e552bb82ff4fd5491fab77bd289bca9755676190f7b1c8f"
+ "source_sha256": "94d7041b2363338131c092decbdee157f3e19076d92c8e9ab3187c5176989bcf"
 }

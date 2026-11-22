@@ -43,6 +43,7 @@ func _init(badge: String, cap: String, wide := false) -> void:
 	value_label.add_theme_constant_override("outline_size", 0)
 	value_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	caption = UI.label(cap.to_upper(), "HudCaption")
+	caption.add_theme_font_override("font", UI.number_font())
 	caption.add_theme_font_size_override("font_size", 9)
 	caption.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
 	caption.add_theme_constant_override("outline_size", 0)
@@ -78,6 +79,12 @@ func set_value(text: String, state := "") -> void:
 	var col: Color = {"ok": OK, "warn": WARN, "bad": BAD}.get(state, Color(0, 0, 0, 0))
 	_strip.color = col
 	value_label.add_theme_color_override("font_color", BAD if state == "bad" else Color.WHITE)
+
+
+## Replaces the caption, e.g. with a per-minute change; tone colours it.
+func set_caption(text: String, tone := 0) -> void:
+	caption.text = text
+	caption.add_theme_color_override("font_color", OK if tone > 0 else (BAD if tone < 0 else Color(1, 1, 1, 0.6)))
 
 
 func pulse() -> void:

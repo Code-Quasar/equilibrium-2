@@ -8,6 +8,7 @@ const Finance = preload("res://simulation/systems/finance.gd")
 const Materials = preload("res://simulation/systems/materials.gd")
 const Waste = preload("res://simulation/systems/waste.gd")
 const Market = preload("res://simulation/systems/market.gd")
+const Reserve = preload("res://simulation/systems/reserve.gd")
 
 ## Foundations are one unique card per seat, in seat order.
 static func create(match_id: String, seed_value: int, foundations: Array, b: Dictionary) -> Dictionary:
@@ -30,6 +31,7 @@ static func create(match_id: String, seed_value: int, foundations: Array, b: Dic
 		Finance.initialize(city, package.credits)
 		Materials.initialize(city, b.city.materials + package.materials)
 		Waste.initialize(city)
+		Reserve.initialize(city, b.reserve.start)
 		for key in ["municipal_micro_E", "plants_micro_E", "biogas_micro_E", "imports_micro_E", "exports_micro_E",
 				"municipal_requested_micro_E", "municipal_delivered_micro_E", "buildings_requested_micro_E",
 				"buildings_delivered_micro_E", "unused_micro_E"]:
@@ -70,6 +72,8 @@ static func validate(state: Dictionary, b: Dictionary) -> String:
 		var error: String = Finance.validate(city)
 		if error.is_empty():
 			error = Materials.validate(city, Waste.recovered(city))
+		if error.is_empty():
+			error = Reserve.validate(city)
 		if not error.is_empty():
 			return error
 	if residents != b.residents:

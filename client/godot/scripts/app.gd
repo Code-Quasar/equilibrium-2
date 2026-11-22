@@ -563,7 +563,7 @@ const HOWTO := [
 	["01", "Objective", ["residential_district"], ["people"],
 		"Four cities draw residents from one shared population. When the 20 minutes run out, the city with the most residents wins. Ties go to Satisfaction, then Environment, then cash."],
 	["02", "Build", ["commercial_district", "factory"], ["coin", "timer"],
-		"Open Build, pick Small, Medium or Large and drag a building onto open land. Each costs cash plus materials (any you lack are bought) and takes real seconds to finish; two can be under construction at once. Watch it rise: the bar shows how far along it is. A building can later grow one size at a time and keeps working while it does."],
+		"Open Build and pick Small, Medium or Large: each card shows what the building changes in Housing, Jobs, Electricity, Pollution, Resources and Money. Every building costs upkeep each minute; some also earn income. Drag it onto open land. Each costs cash plus materials (any you lack are bought) and takes real seconds to finish; two can be under construction at once. Watch it rise: the bar shows how far along it is. A building can later grow one size at a time and keeps working while it does."],
 	["03", "Roads", ["residential_district"], ["warning"],
 		"One main road crosses the map and cannot be removed. Draw your own roads for free. A building works only when it touches a road joined to the main road; otherwise it is switched off and shows a road bubble."],
 	["04", "Residents and Satisfaction", ["public_services_center", "park"], ["homes", "jobs"],
@@ -572,6 +572,8 @@ const HOWTO := [
 		"Power plants generate electricity and most buildings use it. Fossil plants are quick and cheap but dirty the air; renewable plants are clean. A shortage lowers Satisfaction, and spare power can be sold."],
 	["06", "Waste", ["collection_center", "sorting_center", "recycling_center", "biogas_facility"], ["waste", "materials"],
 		"Homes and businesses produce recyclable, organic and residual waste, and the city fleet hauls what it can to the landfill. Build the recovery chain in order: a Collection Center collects more and salvages some recyclables; a Sorting Center separates the rest and reuses more; a Recycling Center then makes the most materials and a Biogas Facility turns organics into power. Each step recovers more from the same waste. Materials pay for construction and feed factories; landfill damage never fades."],
+	["06b", "Resources", ["renewable_power_plant", "recycling_center"], ["materials"],
+		"Every city starts with a fixed stock of natural resources that only goes down. Residents draw on it all the time, so does electricity that is not renewable, and so do raw materials you buy to build or to run factories. Renewable plants and Biogas cut the power drain; bigger, newer recycling recovers more and slows the rest. If your resources reach zero, your city is eliminated and ranks last."],
 	["07", "Trade", ["commercial_district"], ["offers"],
 		"In Trade, offer spare electricity, recycling or organic treatment to the other cities at fixed prices, or accept their offers for one to five minutes. The buyer's escrow holds the most a contract could cost; only real deliveries are paid and the rest comes back."],
 	["08", "Crises", ["fossil_power_plant"], ["event", "pollution"],
@@ -859,6 +861,8 @@ func _show_results() -> void:
 		var cid := int(r["city_id"])
 		var row := UI.hbox(10, [UI.label("%d" % int(r["rank"]), "Display")])
 		var name := ("%s (you)" % session.city_name(cid) if cid == session.seat else session.city_name(cid))
+		if r.get("eliminated", false):
+			name += "  · out of resources"
 		row.add_child(UI.vbox(0, [UI.label(name + ("  🏆" if cid in winners else ""), "Value"),
 			UI.label("Satisfaction %s · Environment %s" % [Catalogue.micro(r.get("satisfaction_micro", 0), 1), Catalogue.micro(r.get("environment_micro", 0), 1)], "Small")]))
 		row.add_child(UI.spacer())

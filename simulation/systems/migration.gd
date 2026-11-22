@@ -44,10 +44,16 @@ static func pulse(state: Dictionary, m: Dictionary, time: int) -> Dictionary:
 	return {"time": time, "satisfaction_micro": scores, "before": before, "housing": housing,
 		"moves": moves, "after": state.cities.map(func(c): return c.population), "transferred": A.total(sent)}
 
-## Final order: population, then exact Satisfaction, Environment and cash. Exact ties share a rank.
+## Final order: cities still standing first, then those eliminated later before
+## those eliminated earlier; within each, population, then exact Satisfaction,
+## Environment and cash. Exact ties share a rank.
 static func ranking(state: Dictionary) -> Array:
-	var keys: Array = ["population", "satisfaction_micro", "environment_micro", "money_micro"]
-	var cities: Array = state.cities.duplicate()
+	var keys: Array = ["survival", "population", "satisfaction_micro", "environment_micro", "money_micro"]
+	var cities: Array = state.cities.map(func(c):
+		var row: Dictionary = c.duplicate()
+		# Active cities outrank any eliminated one; later elimination ranks higher.
+		row["survival"] = 1000000 if c.get("status", "active") != "eliminated" else int(c.get("eliminated_tick", 0))
+		return row)
 	cities.sort_custom(func(x, y):
 		for key in keys:
 			if x[key] != y[key]: return x[key] > y[key]
@@ -59,7 +65,7 @@ static func ranking(state: Dictionary) -> Array:
 		var score: Array = keys.map(func(key): return c[key])
 		if score != previous:
 			rank = result.size() + 1
-		result.append({"rank": rank, "city_id": c.city_id, "population": c.population,
+		result.append({"rank": rank, "city_id": c.city_id, "eliminated": c.survival != 1000000, "population": c.population,
 			"satisfaction_micro": c.satisfaction_micro, "environment_micro": c.environment_micro, "money_micro": c.money_micro})
 		previous = score
 	return result

@@ -206,6 +206,26 @@ func _process(delta: float) -> bool:
 			if t > 0.8:
 				print(("PASS" if app.play.visiting == -1 and not app.map.read_only else "FAIL") + " back in my own city")
 				shot("10e_back_home")
+				print(("PASS" if s.view["own_city"].has("reserve") and int(s.view["own_city"]["reserve"]["units_micro"]) < int(s.view["own_city"]["reserve"]["initial_micro"]) else "FAIL") + " the view carries a falling resource reserve")
+				print(("PASS" if app.play._reserve.value_label.text != "–" and app.play._cash.caption.text.ends_with("/MIN") else "FAIL") + " the HUD shows resources and money per minute")
+				app.play._details("reserve", app.play._reserve)
+				step = 304
+				t = 0.0
+		304:
+			if t > 0.5:
+				shot("10f_reserve_details")
+				app.play.close_details()
+				# TEST FIXTURE ONLY: the view as it would read once this city ran out.
+				s.view["own_city"]["status"] = "eliminated"
+				s.view["own_city"]["eliminated_tick"] = int(s.view["tick"])
+				s.view["own_city"]["reserve"]["units_micro"] = 0
+				app.play.refresh("view")
+				step = 305
+				t = 0.0
+		305:
+			if t > 0.5:
+				shot("10g_eliminated_fixture")
+				print(("PASS" if app.play._out_panel != null and app.play._out_panel.visible else "FAIL") + " an eliminated player sees it and can only watch or leave")
 				# TEST FIXTURE ONLY: a final result shaped like match_finished.
 				var ranks := []
 				for r in s.view["public"]["rankings"]:
