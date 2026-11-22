@@ -50,7 +50,7 @@ def safe(v, seat):
     walk(v)
     assert v['own_city']['city_id'] == seat
     assert len(v['opponents']) == 3
-    assert sum(c['population'] for c in v['opponents']) + v['own_city']['population'] == 4000
+    assert sum(c['population'] for c in v['opponents']) + v['own_city']['population'] == 8000
     for c in v['opponents']:
         assert 'money_micro' not in c and 'materials_micro' not in c
 

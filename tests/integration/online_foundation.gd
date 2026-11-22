@@ -52,6 +52,12 @@ func run_occupancy(humans: int) -> void:
 		app.request(id,message("set_ready",{"ready":true}),0)
 	app.request(1,message("start_match"),0)
 	check(app.phase=="draft","draft phase")
+	var opening: Dictionary = app.match_session.draft_view()
+	var human_seats: Array = range(humans)
+	var first_picks: Array = opening.order.slice(0, humans)
+	first_picks.sort()
+	check(first_picks==human_seats,"humans draft first (%d humans)" % humans)
+	check(opening.choices.all(func(x): return x==null),"no bot has chosen before the humans (%d humans)" % humans)
 	app.outbox.clear()
 	app.request(1,message("start_match"),0)
 	check(app.outbox.any(func(item): return item.message.get("code","")=="invalid_phase"),"repeated start rejected")
@@ -63,18 +69,23 @@ func run_occupancy(humans: int) -> void:
 		check(app.match_session.draft_view().turn_seat==current,"out-of-turn does not move draft")
 		check(app.outbox.any(func(item): return item.message.type=="action_ack" and item.message.status!="applied"),"out-of-turn rejected")
 	var safety: int = 0
+	var bots_waited := true
 	while app.phase == "draft" and safety < 4:
 		var d: Dictionary = app.match_session.draft_view()
 		var owner: int = d.turn_seat
+		bots_waited = bots_waited and range(humans,4).all(func(seat): return d.choices[seat]==null)
 		app.request(app.sessions.entries[owner].connection,message("choose_foundation",{"action_id":"draft","foundation":d.available_foundations[0]}),0)
 		safety += 1
 	check(app.phase=="running" and app.match_session.bots.size()==4-humans,"occupancy %d" % humans)
+	check(bots_waited,"bots choose only after every human (%d humans)" % humans)
+	var picked: Array = app.match_session.game.draft.choices
+	check(picked.all(func(x): return x!=null) and picked.duplicate().filter(func(x): return picked.count(x)==1).size()==4,"four distinct Foundations (%d humans)" % humans)
 	for id in range(1,humans+1):
 		app.request(id,message("submit_action",{"action_id":"build","kind":"construct","payload":{"building_type":"park","size":"S"}}),0)
 	app.advance(1000)
 	check(app.match_session.game.snapshot().tick==1,"one tick")
 	var state: Dictionary = app.match_session.game.snapshot()
-	check(state.cities.reduce(func(total,c):return total+c.population,0)==4000,"population")
+	check(state.cities.reduce(func(total,c):return total+c.population,0)==8000,"population totals 8,000")
 	for seat in range(humans):
 		check(state.cities[seat].buildings.any(func(b): return b.type=="park"),"human action")
 		var before: String = app.match_session.game.engine.serialize()

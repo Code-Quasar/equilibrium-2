@@ -4,7 +4,10 @@ extends SceneTree
 ## The results screen is filled from a labelled test fixture, because a real
 ## final result takes a full 20-minute match.
 ##
-##   godot --path client/godot --script res://tests/capture.gd -- ws://127.0.0.1:9080 /tmp/shots 1170x540
+##   godot --path client/godot --script res://tests/capture.gd -- ws://127.0.0.1:9080 /tmp/shots 1170x540 [l,t,r,b]
+##
+## The optional last argument simulates a phone's cut-outs (safe-area insets in
+## interface units), to check that nothing ends up under a notch.
 
 var app: Node
 var s: Session
@@ -22,6 +25,8 @@ func _initialize() -> void:
 	if args.size() > 2:
 		var p := args[2].split("x")
 		size = Vector2i(int(p[0]), int(p[1]))
+	if args.size() > 3:
+		UI.debug_safe = Array(args[3].split(",")).map(func(x): return float(x))
 	DirAccess.make_dir_recursive_absolute(out)
 	DisplayServer.window_set_size(size)
 	app = load("res://main.tscn").instantiate()
@@ -206,6 +211,88 @@ func _process(delta: float) -> bool:
 			if t > 0.8:
 				print(("PASS" if app.play.visiting == -1 and not app.map.read_only else "FAIL") + " back in my own city")
 				shot("10e_back_home")
+				app.play._explain("jobs", app.play._need_chips["jobs"])
+				step = 500
+				t = 0.0
+		500:
+			if t > 0.4:
+				shot("12_metric_explanation")
+				print(("PASS" if app.play.explanation_visible() else "FAIL") + " tapping a figure explains it")
+				var mb := InputEventMouseButton.new(); mb.button_index = MOUSE_BUTTON_LEFT; mb.pressed = true; mb.position = Vector2(size.x * 0.5, size.y * 0.7); mb.global_position = mb.position
+				Input.parse_input_event(mb)
+				var mu := InputEventMouseButton.new(); mu.button_index = MOUSE_BUTTON_LEFT; mu.pressed = false; mu.position = mb.position; mu.global_position = mb.position
+				Input.parse_input_event(mu)
+				step = 501
+				t = 0.0
+		501:
+			if t > 0.2 and not has_meta("closed"):
+				set_meta("closed", true)
+				print(("PASS" if not app.play.explanation_visible() else "FAIL") + " a tap elsewhere closes the explanation at once")
+			# Wait for a free construction slot before upgrading.
+			if has_meta("closed") and null in s.view["own_city"]["projects"]:
+				app.play._open("")
+				# Upgrade the Foundation's Collection Center and look at it.
+				for b in s.view["own_city"]["buildings"]:
+					if b["type"] == "collection_center" and b["status"] == "complete" and b["size"] == "S":
+						set_meta("up", int(b["id"]))
+						app.play._on_tile(int(b["tile"]))
+						s.act("upgrade", {"building_id": int(b["id"])}, "Upgrade Collection Center")
+						break
+				step = 502
+				t = 0.0
+		502:
+			if t > 2.0:
+				shot("13_upgrade_in_progress")
+				var up: Dictionary = {}
+				for b in s.view["own_city"]["buildings"]:
+					if int(b["id"]) == int(get_meta("up", -1)):
+						up = b
+				var upgrading := false
+				for pr in s.view["own_city"]["projects"]:
+					if pr != null and int(pr["building_id"]) == int(get_meta("up", -1)) and pr["kind"] == "upgrade":
+						upgrading = true
+				print(("PASS" if upgrading and up.get("status", "") == "complete" and int(up.get("op", {}).get("fraction_micro", 0)) > 0 else "FAIL") + " an upgrading building keeps working")
+				app.play._open("")
+				# Pick up a home and move it beside the main road.
+				for b in s.view["own_city"]["buildings"]:
+					if b["type"] == "residential_district":
+						set_meta("mv", [int(b["id"]), int(b["tile"])])
+						app.play.start_moving(int(b["tile"]))
+						break
+				var spot: Vector2i = app.map.layout.spot_beside_main()
+				app.play._on_ghost_drag(spot + Vector2i(1, 1))
+				step = 503
+				t = 0.0
+		503:
+			if t > 0.5:
+				shot("14_moving_a_building")
+				print(("PASS" if not app.play.moving().is_empty() and app.play.moving().get("ok", false) else "FAIL") + " a held building follows the finger to a valid site")
+				app.play._confirm_place()
+				step = 504
+				t = 0.0
+		504:
+			var mv: Array = get_meta("mv")
+			var now_tile := -1
+			for b in s.view["own_city"]["buildings"]:
+				if int(b["id"]) == mv[0]:
+					now_tile = int(b["tile"])
+			if now_tile != mv[1] and now_tile >= 0 and t > 0.6:
+				print("PASS the server moved the building and the map follows it")
+				shot("14b_moved")
+				# TEST FIXTURE ONLY: a crisis made active in the last view, as the
+				# server reports one, to show its arrival.
+				s.view["public"]["crisis"]["active"] = ["smog_alert"]
+				app.play.refresh("view")
+				step = 505
+				t = 0.0
+			elif t > 6.0:
+				print("FAIL the server moved the building and the map follows it")
+				step = 505
+				t = 0.0
+		505:
+			if t > 0.35:
+				shot("15_crisis_pulse")
+				print(("PASS" if app.play._edge.playing() else "FAIL") + " a crisis striking pulses the screen edges")
 				# TEST FIXTURE ONLY: a final result shaped like match_finished.
 				var ranks := []
 				for r in s.view["public"]["rankings"]:

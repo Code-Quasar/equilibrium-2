@@ -233,37 +233,18 @@ func _show_menu() -> void:
 	lay.add_child(panel)
 	var box := UI.vbox(10)
 	panel.add_child(box)
-	box.add_child(UI.label("Server address", "OnDarkCaption"))
-	var addr := LineEdit.new()
-	addr.theme_type_variation = "DarkField"
-	addr.text = _address_text()
-	addr.placeholder_text = "192.168.1.20:9080"
-	addr.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_URL
-	addr.clear_button_enabled = true
-	addr.select_all_on_focus = false
-	addr.custom_minimum_size.y = 50
+	box.add_child(UI.label("Server address · port", "OnDarkCaption"))
+	var addr := AddressField.new(_address_text())
 	box.add_child(addr)
-	var err := UI.label("", "OnDarkError", true)
-	err.visible = false
-	box.add_child(err)
-	var check := func() -> bool:
-		var why := Settings.address_problem(addr.text)
-		err.text = why
-		err.visible = why != ""
-		return why == ""
-	addr.text_changed.connect(func(t: String):
-		_typed_address = t
-		if err.visible:
-			check.call())
+	addr.changed.connect(func(): _typed_address = addr.address())
 	var go := func(then: Callable):
-		if not check.call():
-			addr.grab_focus()
-			addr.edit()
+		if not addr.validate():
+			addr.focus_first_problem()
 			return
 		get_viewport().gui_release_focus()
-		Settings.address = Settings.url_to_address(addr.text.strip_edges())
+		Settings.address = addr.address()
 		Settings.save()
-		then.call(Settings.address_to_url(addr.text))
+		then.call(Settings.address_to_url(addr.address()))
 	var create := UI.button("Create game", "PrimaryButton", "plus", func(): go.call(func(u): session.create(u)))
 	create.custom_minimum_size.y = 52
 	box.add_child(create)
@@ -271,6 +252,7 @@ func _show_menu() -> void:
 	code.theme_type_variation = "DarkField"
 	code.text = _typed_code
 	code.placeholder_text = "4-digit code"
+	code.add_theme_font_override("font", UI.number_font())
 	code.max_length = 4
 	code.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER
 	code.custom_minimum_size.y = 50
@@ -294,19 +276,17 @@ func _show_menu() -> void:
 	var join := UI.button("Join", "", "play", join_now)
 	join.custom_minimum_size = Vector2(110, 50)
 	box.add_child(UI.hbox(8, [code, join]))
-	# Done / Enter moves on: address → code → join.
-	# Enter/Done on a bad address keeps the field open for correction;
-	# on a good one the code field takes over.
-	addr.keep_editing_on_text_submit = true
-	addr.text_submitted.connect(func(_t):
-		if check.call():
+	# Done / Enter moves on: each address box → the code → join. A bad
+	# address keeps its box open for correction.
+	addr.submitted.connect(func():
+		if addr.validate():
 			code.grab_focus()
-			code.edit())
+		else:
+			addr.focus_first_problem())
 	code.text_submitted.connect(func(_t):
 		get_viewport().gui_release_focus()
 		if code.text.strip_edges() != "":
 			join_now.call())
-	addr.focus_next = code.get_path()
 	if session.has_saved_seat():
 		var cont := UI.button("Continue your match", "SoftButton", "play", func(): session.rejoin())
 		cont.custom_minimum_size.y = 48
@@ -324,7 +304,7 @@ func _show_menu() -> void:
 	box.add_child(row)
 
 
-## Emblem and wordmark; the font is the game's own (Kenney Future).
+## Emblem and wordmark, in the game's Pixelify Sans.
 func _brand(portrait: bool) -> Control:
 	var col := UI.vbox(6)
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -490,6 +470,9 @@ func _open_settings() -> void:
 		row.add_child(pct)
 		body.add_child(row)
 	body.add_child(_toggle("Mute all sound", Settings.muted, func(on): Settings.muted = on; Settings.save()))
+	body.add_child(UI.label("Display", "Chapter"))
+	body.add_child(_toggle("Reduce motion", Settings.reduce_motion, func(on): Settings.reduce_motion = on; Settings.save()))
+	body.add_child(UI.label("Crises then glow once at the screen edges instead of pulsing.", "OnDarkCaption", true))
 	body.add_child(UI.label("Connection", "Chapter"))
 	body.add_child(_toggle("Secure connection (wss://)", Settings.secure, func(on): Settings.secure = on; Settings.save()))
 	body.add_child(UI.label("Use it when the server sits behind TLS. Most local servers use the plain connection.", "OnDarkCaption", true))
@@ -638,6 +621,7 @@ func _show_lobby() -> void:
 	if session.join_code != "":
 		left.add_child(UI.label("Join code", "Caption"))
 		var code := UI.label(session.join_code, "Title")
+		code.add_theme_font_override("font", UI.number_font())
 		code.add_theme_font_size_override("font_size", 30)
 		left.add_child(code)
 		left.add_child(UI.label("Send it to your friends. They enter the same server address and join with it.", "Caption", true))
@@ -688,78 +672,138 @@ func _show_lobby() -> void:
 
 # ------------------------------------------------------------------ draft ---
 
+## All four Foundations side by side, each with its colour, starting package,
+## strengths and trade-off; above them every seat's pick in its own chip, so
+## nothing is hidden. Human seats choose first; bots then take what is left.
 func _show_draft() -> void:
 	var pc := _page()
 	_set_screen(pc[0])
 	var col: VBoxContainer = pc[1]
+	col.add_theme_constant_override("separation", 10)
 	var d := session.draft
 	var order: Array = d.get("order", [])
 	var choices: Array = d.get("choices", [null, null, null, null])
 	var available: Array = d.get("available_foundations", [])
 	var turn := int(d.get("turn_seat", -1))
 	var mine := turn == session.seat
-	col.add_child(UI.label("Choose your Foundation", "Display"))
+	var bots := {}
+	for row in session.lobby.get("seats", []):
+		if str(row.get("controller", "")) == "bot":
+			bots[int(row["seat"])] = true
 	var status := ""
 	if not session.draft_choice.is_empty():
 		status = "Sending your choice…" if session.draft_choice["status"] == "sending" else "Choice received — confirming…"
 	elif mine:
 		status = "Your turn: pick the head start only your city will have."
 	elif turn >= 0:
-		status = "Waiting for City %d to choose…" % (turn + 1)
+		status = ("Bots are choosing from what is left…" if bots.has(turn) else "Waiting for City %d to choose…" % (turn + 1))
 	else:
 		status = "All chosen — the match is starting."
+	var head := UI.hbox(14)
+	head.add_child(UI.label("Choose your Foundation", "Display"))
 	var st := UI.label(status, "Value", true)
 	st.add_theme_color_override("font_color", UI.PRIMARY_DARK if mine else UI.MUTED)
-	col.add_child(st)
+	st.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	st.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(st)
 	if not session.live:
-		col.add_child(UI.pill("Reconnecting…", UI.WARN))
-	var picks := HFlowContainer.new()
-	picks.add_theme_constant_override("h_separation", 18)
+		head.add_child(UI.pill("Reconnecting…", UI.WARN))
+	col.add_child(head)
+	# Every seat's pick, in draft order, each in a chip of its own.
+	var picks := UI.hbox(8)
 	for k in order.size():
-		var s := int(order[k])
-		var f: Variant = choices[s] if s < choices.size() else null
-		var who := "You" if s == session.seat else "City %d" % (s + 1)
-		var txt := "%d. %s — %s" % [k + 1, who, Catalogue.FOUNDATIONS[f][0] if f != null else ("choosing…" if s == turn else "…")]
-		picks.add_child(UI.label(txt, "Caption"))
-	col.add_child(UI.panel("Card", picks))
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 14)
-	grid.add_theme_constant_override("v_separation", 14)
-	col.add_child(grid)
+		var seat := int(order[k])
+		var f: Variant = choices[seat] if seat < choices.size() else null
+		var who := "You" if seat == session.seat else ("Bot · City %d" % (seat + 1) if bots.has(seat) else "City %d" % (seat + 1))
+		var chip := UI.vbox(0)
+		chip.add_child(UI.label("%d · %s" % [k + 1, who], "Small"))
+		var what := UI.label("", "Value", true)
+		if f != null:
+			what.text = Catalogue.FOUNDATIONS[f][0]
+			what.add_theme_color_override("font_color", Catalogue.FOUNDATIONS[f][2].darkened(0.15))
+		else:
+			what.text = "Choosing…" if seat == turn else ("After the players" if bots.has(seat) else "Waiting")
+			what.add_theme_color_override("font_color", UI.MUTED)
+		chip.add_child(what)
+		var box := PanelContainer.new()
+		var tint: Color = Catalogue.FOUNDATIONS[f][2] if f != null else UI.LINE
+		box.add_theme_stylebox_override("panel", UI.box(UI.PAPER2 if seat != turn else Color("#e6f6ee"), 12, tint, 2 if f != null or seat == turn else 1, 0, Color(), 8))
+		box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		box.size_flags_stretch_ratio = 1.0
+		box.add_child(chip)
+		picks.add_child(box)
+	col.add_child(picks)
+	var row := UI.hbox(12)
+	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(row)
 	var cat: Dictionary = Catalogue.data().get("foundations", {})
 	for id in Catalogue.FOUNDATIONS:
-		var meta: Array = Catalogue.FOUNDATIONS[id]
 		var taken: bool = not (id in available)
 		var pending: bool = session.draft_choice.get("foundation", "") == id
-		var box := UI.vbox(8)
-		var row := UI.hbox(12)
+		var owner := choices.find(id)
+		row.add_child(_foundation_card(id, cat.get(id, {}), taken, pending, mine, owner))
+
+
+## One Foundation: colour band and name, its starting buildings, cash as a chip,
+## two strengths and a trade-off, and the choose button.
+func _foundation_card(id: String, pkg: Dictionary, taken: bool, pending: bool, mine: bool, owner: int) -> Control:
+	var meta: Array = Catalogue.FOUNDATIONS[id]
+	var colour: Color = meta[2]
+	var card := PanelContainer.new()
+	card.add_theme_stylebox_override("panel", UI.box(UI.PAPER, 16, colour if not taken else UI.LINE, 2, 4, colour.darkened(0.25) if not taken else UI.LIP, 0))
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.size_flags_stretch_ratio = 1.0
+	var col := UI.vbox(6)
+	card.add_child(col)
+	var band := PanelContainer.new()
+	var bs := UI.box(colour if not taken else UI.MUTED, 14, Color(), 0, 0, Color(), 8)
+	bs.corner_radius_bottom_left = 0
+	bs.corner_radius_bottom_right = 0
+	band.add_theme_stylebox_override("panel", bs)
+	var name := UI.label(meta[0], "Value", true)
+	name.add_theme_color_override("font_color", Color.WHITE)
+	band.add_child(name)
+	col.add_child(band)
+	var inner := UI.vbox(6)
+	var pad := MarginContainer.new()
+	for side in ["left", "right", "bottom"]:
+		pad.add_theme_constant_override("margin_" + side, 10)
+	pad.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	pad.add_child(inner)
+	col.add_child(pad)
+	var starts: Array = pkg.get("buildings", [])
+	var pics := UI.hbox(2)
+	pics.alignment = BoxContainer.ALIGNMENT_CENTER
+	for x in (starts if not starts.is_empty() else [{"type": "commercial_district", "size": "S"}]):
 		var t := TextureRect.new()
-		var pkg: Dictionary = cat.get(id, {})
-		var starts: Array = pkg.get("buildings", [])
-		t.texture = UI.thumbs.get_thumb(str(starts[-1]["type"]) if not starts.is_empty() else "commercial_district", "S")
+		t.texture = UI.thumbs.get_thumb(str(x["type"]), str(x["size"]))
 		t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		t.custom_minimum_size = Vector2(92, 92)
-		row.add_child(t)
-		var info := UI.vbox(4)
-		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		info.add_child(UI.label(meta[0], "Title"))
-		info.add_child(UI.label(meta[1], "Caption", true))
-		var start := "Starts with %s cash" % Catalogue.fmt(float(pkg.get("cash", 0)))
-		if not starts.is_empty():
-			start += " and " + " and ".join(starts.map(func(x): return "a %s %s" % [Catalogue.size_name(str(x["size"])), Catalogue.building_name(str(x["type"]))]))
-		info.add_child(UI.label(start, "Small", true))
-		row.add_child(info)
-		box.add_child(row)
-		var label := "Taken" if taken else ("Sending…" if pending else ("Choose" if mine else "Not your turn"))
-		var b := UI.button(label, "PrimaryButton" if mine and not taken else "SoftButton", "check" if mine and not taken else "", func(): session.choose_foundation(id))
-		b.disabled = taken or not mine or not session.draft_choice.is_empty() or not session.live
-		box.add_child(b)
-		var card := UI.panel("Card", box)
-		card.modulate = Color(1, 1, 1, 0.5) if taken else Color.WHITE
-		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		grid.add_child(card)
+		t.custom_minimum_size = Vector2(64, 56)
+		t.modulate = Color(1, 1, 1, 0.35) if starts.is_empty() else Color.WHITE
+		pics.add_child(t)
+	inner.add_child(pics)
+	inner.add_child(UI.label(meta[1], "Caption", true))
+	var chips := HFlowContainer.new()
+	chips.add_theme_constant_override("h_separation", 6)
+	chips.add_theme_constant_override("v_separation", 4)
+	chips.add_child(UI.stat_chip("coin", Catalogue.fmt(float(pkg.get("cash", 0))), UI.MONEY))
+	for x in starts:
+		chips.add_child(UI.stat_chip("build", "%s %s" % [Catalogue.short_name(str(x["type"])), str(x["size"])], colour))
+	inner.add_child(chips)
+	for good in meta[3]:
+		inner.add_child(UI.pro_con(good, true))
+	inner.add_child(UI.pro_con(meta[4], false))
+	inner.add_child(UI.spacer(false))
+	var label := "Taken" if taken else ("Sending…" if pending else ("Choose" if mine else "Not your turn"))
+	if owner >= 0:
+		label = "Yours" if owner == session.seat else "City %d" % (owner + 1)
+	var b := UI.button(label, "PrimaryButton" if mine and not taken else "SoftButton", "check" if mine and not taken else "", func(): session.choose_foundation(id))
+	b.disabled = taken or not mine or not session.draft_choice.is_empty() or not session.live
+	b.custom_minimum_size.y = 46
+	inner.add_child(b)
+	card.modulate = Color(1, 1, 1, 0.6) if taken and owner != session.seat else Color.WHITE
+	return card
 
 
 # -------------------------------------------------------------------- play ---

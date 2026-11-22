@@ -21,7 +21,7 @@ func _initialize() -> void:
 		app.outbox.clear()
 		app.advance(tick*1000)
 		var state: Dictionary = app.match_session.game.snapshot()
-		if state.tick != previous+1 or state.cities.reduce(func(n,c): return n+c.population,0) != 4000:
+		if state.tick != previous+1 or state.cities.reduce(func(n,c): return n+c.population,0) != 8000:
 			printerr("FAIL: tick/conservation"); quit(1); return
 		previous = state.tick
 	var state: Dictionary = app.match_session.game.snapshot()

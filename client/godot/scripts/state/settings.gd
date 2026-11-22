@@ -1,7 +1,7 @@
 class_name Settings
 extends RefCounted
-## Device preferences: volumes, secure transport, developer diagnostics and the
-## last server address. Nothing here reaches the server or changes the game.
+## Device preferences: volumes, reduced motion, secure transport, developer
+## diagnostics and the last server address. Nothing here reaches the server or changes the game.
 
 const PATH := "user://settings.cfg"
 
@@ -11,6 +11,7 @@ static var sfx := 0.8
 static var muted := false
 static var secure := false          # wss:// instead of ws://
 static var diagnostics := false     # developer network overlay
+static var reduce_motion := false   # gentler effects: no repeated pulses
 static var address := ""            # host:port as typed
 static var _loaded := false
 
@@ -38,6 +39,7 @@ static func load_all() -> void:
 		muted = bool(c.get_value("audio", "muted", muted))
 		secure = bool(c.get_value("net", "secure", secure))
 		diagnostics = bool(c.get_value("net", "diagnostics", diagnostics))
+		reduce_motion = bool(c.get_value("display", "reduce_motion", reduce_motion))
 		address = str(c.get_value("net", "address", address))
 	apply_audio()
 
@@ -50,6 +52,7 @@ static func save() -> void:
 	c.set_value("audio", "muted", muted)
 	c.set_value("net", "secure", secure)
 	c.set_value("net", "diagnostics", diagnostics)
+	c.set_value("display", "reduce_motion", reduce_motion)
 	c.set_value("net", "address", address)
 	c.save(PATH)
 	apply_audio()

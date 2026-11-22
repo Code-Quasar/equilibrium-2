@@ -1,8 +1,13 @@
 class_name UI
 extends RefCounted
-## The game's theme, built on the Kenney UI pack (CC0): its 9-slice buttons
-## and panels, its Kenney Future font and its interface sounds, plus small
+## The game's theme, built on the Kenney UI pack (CC0): its 9-slice buttons,
+## panels and interface sounds, set in Pixelify Sans (SIL OFL 1.1), plus small
 ## factories so screens can be built in code.
+##
+## Type scale: Display 28 · Title 20 · Value 16 bold · Body 15 · Caption 13 ·
+## Small 12, all in Pixelify Sans. Figures (the HUD, prices, chips) use a bold
+## plain sans instead: Pixelify's 5 reads as an S at phone sizes, and a number
+## must never be misread.
 
 const PAPER := Color("#fbf8f1")
 const PAPER2 := Color("#f2ede1")
@@ -50,16 +55,37 @@ static func kbox(colour: String, image: String, pad := 10, side := 14) -> StyleB
 	return s
 
 
+const FONT := "res://assets/fonts/PixelifySans.ttf"
+static var _fonts := {}
+
+
+## Pixelify Sans at a weight (400 regular, 500 medium, 700 bold), with the
+## system font behind it for symbols it lacks (·, ✓, emoji).
+static func font(weight := 400) -> Font:
+	if not _fonts.has(weight):
+		var file: FontFile = load(FONT)
+		var fallback := SystemFont.new()
+		fallback.font_names = PackedStringArray(["Noto Sans", "Roboto", "DejaVu Sans", "sans-serif"])
+		var emoji := SystemFont.new()
+		emoji.font_names = PackedStringArray(["Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji"])
+		file.fallbacks = [fallback, emoji]
+		var f := FontVariation.new()
+		f.base_font = file
+		f.variation_opentype = {TextServerManager.get_primary_interface().name_to_tag("wght"): weight}
+		_fonts[weight] = f
+	return _fonts[weight]
+
+
 static var _numbers: SystemFont
 
 
-## A plain bold font for figures on the HUD, where "1,200/1,150" and "88%"
-## must read at a glance.
+## Figures on the HUD, in prices and chips: a bold plain sans, so "1,250" and
+## "0:25" read at a glance.
 static func number_font() -> Font:
 	if _numbers == null:
 		_numbers = SystemFont.new()
-		_numbers.font_names = PackedStringArray(["Noto Sans", "Roboto", "DejaVu Sans", "sans-serif"])
-		_numbers.font_weight = 800
+		_numbers.font_names = PackedStringArray(["Roboto", "Noto Sans", "Segoe UI", "DejaVu Sans", "sans-serif"])
+		_numbers.font_weight = 700
 	return _numbers
 
 
@@ -86,17 +112,10 @@ static func box(bg: Color, radius := 16, border := Color(0, 0, 0, 0), border_w :
 
 static func make_theme() -> Theme:
 	var t := Theme.new()
-	var regular: FontFile = load("res://assets/kenney/ui/Kenney Future Narrow.ttf")
-	var bold: FontFile = load("res://assets/kenney/ui/Kenney Future.ttf")
-	# Symbols the Kenney fonts lack (%, ·, emoji) come from the system font.
-	var fallback := SystemFont.new()
-	fallback.font_names = PackedStringArray(["Noto Sans", "Roboto", "DejaVu Sans", "sans-serif"])
-	var emoji := SystemFont.new()
-	emoji.font_names = PackedStringArray(["Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji"])
-	for f in [regular, bold]:
-		f.fallbacks = [fallback, emoji]
+	var regular := font(400)
+	var bold := font(700)
 	t.default_font = regular
-	t.default_font_size = 16
+	t.default_font_size = 15
 
 	t.set_color("font_color", "Label", INK)
 	for v in [["Title", 20, bold, INK], ["Display", 28, bold, INK], ["Caption", 13, regular, MUTED], ["Value", 16, bold, INK], ["Small", 12, regular, MUTED]]:
@@ -177,6 +196,9 @@ static func make_theme() -> Theme:
 	t.set_constant("separation", "VBoxContainer", 8)
 	t.set_constant("separation", "HBoxContainer", 8)
 	t.set_stylebox("panel", "ScrollContainer", StyleBoxEmpty.new())
+	for c in ["LineEdit", "DarkField"]:
+		t.set_color("clear_button_color", c, MUTED)
+		t.set_color("clear_button_color_pressed", c, INK)
 	for c in ["LineEdit", "SpinBox"]:
 		t.set_color("caret_color", c, PRIMARY_DARK)
 		t.set_constant("caret_width", c, 2)
@@ -234,7 +256,12 @@ static func make_theme() -> Theme:
 
 ## Space the device keeps for notches, rounded corners and system bars, in the
 ## interface's own units: [left, top, right, bottom].
+static var debug_safe: Array = []      # tests only: simulated [left, top, right, bottom] cut-outs
+
+
 static func safe_margins(node: CanvasItem) -> Array:
+	if not debug_safe.is_empty():
+		return debug_safe.duplicate()
 	var win := DisplayServer.window_get_size()
 	var safe := DisplayServer.get_display_safe_area()
 	if win.x <= 0 or safe.size.x <= 0 or OS.get_name() not in ["Android", "iOS"]:
@@ -549,6 +576,48 @@ static func pill(text: String, color: Color) -> PanelContainer:
 	p.add_child(l)
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return p
+
+
+## A compact figure with its symbol: a coloured badge (coin, people, power,
+## homes, jobs, waste, materials, pollution, appeal, timer) or a tinted icon.
+## Effects read as "+145" in green, costs as "−22" in red, plain facts in ink.
+static func stat_chip(symbol: String, text: String, tint := INK, tone := "") -> PanelContainer:
+	var p := PanelContainer.new()
+	var bg: Color = {"good": Color("#e3f5ec"), "bad": Color("#fbe7e3")}.get(tone, PAPER2)
+	p.add_theme_stylebox_override("panel", box(bg, 99, Color(), 0, 0, Color(), 3))
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var row := hbox(4)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var badges := ["coin", "people", "power", "homes", "jobs", "waste", "materials", "pollution", "appeal", "timer"]
+	if symbol in badges:
+		row.add_child(badge(symbol, 18))
+	else:
+		row.add_child(icon(symbol, 16, tint))
+	var l := label(text, "Small")
+	l.add_theme_font_override("font", number_font())
+	l.add_theme_color_override("font_color", {"good": PRIMARY_DARK, "bad": DANGER_DARK}.get(tone, INK))
+	row.add_child(l)
+	var m := MarginContainer.new()
+	m.add_theme_constant_override("margin_left", 3)
+	m.add_theme_constant_override("margin_right", 7)
+	m.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	m.add_child(row)
+	p.add_child(m)
+	return p
+
+
+## A strength (+, green) or a trade-off (−, red) as one short line.
+static func pro_con(text: String, good: bool) -> HBoxContainer:
+	var row := hbox(6)
+	var mark := label("+" if good else "−", "Value")
+	mark.add_theme_color_override("font_color", PRIMARY_DARK if good else DANGER_DARK)
+	mark.custom_minimum_size.x = 10
+	row.add_child(mark)
+	var l := label(text, "Small", true)
+	l.add_theme_color_override("font_color", INK)
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(l)
+	return row
 
 
 ## Lets touches fall through everything but real controls, so a swipe that

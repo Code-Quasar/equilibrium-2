@@ -25,11 +25,17 @@ const BUILDINGS := {
 const SIZES := {"S": "Small", "M": "Medium", "L": "Large"}
 const NEXT_SIZE := {"S": "M", "M": "L"}
 
+## Foundation identity: name, one-line idea, colour, strengths, trade-off.
+## The package itself (cash, buildings) comes from the exported catalogue.
 const FOUNDATIONS := {
-	"industrial_legacy": ["Industrial Legacy", "Starts with a Factory: jobs and income now, but it eats materials and power and makes waste."],
-	"circular_foundation": ["Circular Foundation", "Starts with a Collection and a Sorting Center: recovers materials from the first minute, and can build a Recycling Center at once."],
-	"energy_pioneer": ["Energy Pioneer", "Starts with a Renewable Power Plant: spare clean power to grow on or to sell."],
-	"investment_district": ["Investment District", "No building, the most cash: the most flexible opening."],
+	"industrial_legacy": ["Industrial Legacy", "A running Factory from the first second.", Color("#c9683a"),
+		["Jobs and income at once", "Strong early economy"], "Eats materials and power; makes smoke"],
+	"circular_foundation": ["Circular Foundation", "Collection and Sorting already built.", Color("#2e9e64"),
+		["Recovers materials at once", "Recycling and Biogas unlocked"], "No income building to start"],
+	"energy_pioneer": ["Energy Pioneer", "A Renewable Power Plant, clean and paid for.", Color("#d9a21b"),
+		["Spare clean power to grow on", "Sell power to rivals"], "Power alone earns nothing"],
+	"investment_district": ["Investment District", "No building, the most cash.", Color("#3a78d0"),
+		["Most cash of all", "Most flexible opening"], "Everything still to build"],
 }
 
 const EVENTS := {
@@ -107,6 +113,17 @@ static func data() -> Dictionary:
 
 static func error_text(code: String) -> String:
 	return ERRORS.get(code, "")
+
+
+## A short name for chips and tight rows.
+const SHORT := {"residential_district": "Homes", "commercial_district": "Commerce", "factory": "Factory",
+	"public_services_center": "Services", "park": "Park", "collection_center": "Collection",
+	"sorting_center": "Sorting", "recycling_center": "Recycling", "biogas_facility": "Biogas",
+	"landfill": "Landfill", "fossil_power_plant": "Fossil plant", "renewable_power_plant": "Renewable"}
+
+
+static func short_name(t: String) -> String:
+	return SHORT.get(t, building_name(t))
 
 
 static func building_name(t: String) -> String:

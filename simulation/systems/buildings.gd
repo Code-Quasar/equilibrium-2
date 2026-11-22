@@ -6,7 +6,7 @@ const A = preload("res://simulation/core/arithmetic.gd")
 const Balance = preload("res://simulation/core/balance.gd")
 const Finance = preload("res://simulation/systems/finance.gd")
 const Materials = preload("res://simulation/systems/materials.gd")
-const COMMANDS = ["construct", "upgrade", "cancel_project", "demolish", "disable", "enable"]
+const COMMANDS = ["construct", "upgrade", "cancel_project", "demolish", "disable", "enable", "move"]
 const NEXT_SIZE = {"S": "M", "M": "L"}
 var b: Dictionary
 
@@ -74,9 +74,9 @@ func prerequisite_error(city: Dictionary, kind: String) -> String:
 			return "prerequisite_under_construction" if "constructing" in states else "requires_" + required
 	return ""
 
-## Nominal housing from the municipal baseline and enabled, completed districts.
+## Nominal housing of the enabled, completed districts.
 func enabled_housing(city: Dictionary) -> int:
-	var housing: int = b.city.housing
+	var housing: int = 0
 	for building in city.buildings:
 		if building.status == "complete" and building.enabled:
 			housing += tier(building).housing
@@ -105,6 +105,8 @@ func validate(state: Dictionary, command: Dictionary) -> String:
 			return error
 		var t: Dictionary = b.buildings[p.building_type][p.size]
 		return _project_error(state, city, t.credits, t.materials, t.seconds)
+	if kind == "move":
+		return _move_error(city, p)
 	if p.size() != 1 or typeof(p.get("building_id")) != TYPE_INT:
 		return "invalid_payload"
 	var building: Dictionary = find(city, p.building_id)
@@ -145,6 +147,19 @@ func _project_error(state: Dictionary, city: Dictionary, credits: int, materials
 		return "not_enough_time"
 	if Finance.available(city) < credits + Materials.purchase_cost(city, b, materials):
 		return "insufficient_funds"
+	return ""
+
+## A building, finished or not, may move to any free plot of its own city. Moving
+## changes only its plot: its project, operation and carries stay with it.
+func _move_error(city: Dictionary, p: Dictionary) -> String:
+	if p.size() != 2 or typeof(p.get("building_id")) != TYPE_INT or typeof(p.get("tile")) != TYPE_INT:
+		return "invalid_payload"
+	if find(city, p.building_id).is_empty():
+		return "building_not_owned"
+	if p.tile < 0 or p.tile >= b.tiles:
+		return "invalid_tile"
+	if city.buildings.any(func(x): return x.tile == p.tile):
+		return "tile_occupied"
 	return ""
 
 ## True when demolishing this building would leave a dependent without its prerequisite.
@@ -196,6 +211,8 @@ func execute(state: Dictionary, command: Dictionary) -> String:
 			building.reactivate_at = state.tick + b.construction.reactivation_cooldown
 		"enable":
 			find(city, p.building_id).enabled = true
+		"move":
+			find(city, p.building_id).tile = p.tile
 	return ""
 
 ## Credits and materials are paid in full at acceptance. A failure here makes the

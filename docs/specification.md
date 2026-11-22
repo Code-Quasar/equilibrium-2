@@ -5,13 +5,13 @@ This document defines the rules the authoritative engine implements. The live nu
 ## 1. Match and victory
 
 - Four cities, one per seat. A match is exactly 1,200 one-second ticks; tick `t` advances state over `[t, t+1)` and the final state has `tick = 1200`.
-- The region holds exactly 4,000 residents, 1,000 per city at the start. Population changes only through migration.
+- The region holds exactly 8,000 residents, 2,000 per city at the start. Population changes only through migration.
 - The city with the most residents at tick 1,200 wins. Ties break by higher exact Satisfaction, then higher Environment, then more cash. A remaining exact tie shares the rank.
 - There are no turns. A city may run at most two construction or upgrade projects at once, with no queue.
 
 ## 2. Foundations
 
-Seats draft one unique Foundation each, in a seeded random order. Each Foundation is only its starting package; there are no ongoing modifiers.
+Seats draft one unique Foundation each. Human seats choose first, in a seeded random order; bot seats then choose, also in seeded order, from the Foundations left. Each Foundation is only its starting package; there are no ongoing modifiers.
 
 | Foundation | Completed starting buildings | Cash |
 |---|---|---:|
@@ -20,13 +20,15 @@ Seats draft one unique Foundation each, in a seeded random order. Each Foundatio
 | Energy Pioneer | Renewable Power Plant S | 395 |
 | Investment District | none | 660 |
 
-Starting buildings occupy plots from 0 upward, operate from the first tick and obey every prerequisite rule. They pay upkeep like any other building.
+Every city also starts with the baseline homes (section 3), which come first. Starting buildings occupy plots from 0 upward, operate from the first tick and obey every prerequisite rule. They pay upkeep like any other building.
 
 ## 3. Units and starting city
 
 Money is in credits, waste and materials in mass units, electricity in E (a capacity, not a stock), pollution in Environment points. Rates are per game minute. The engine stores every non-count quantity as an integer number of micro-units (10⁻⁶) and carries the exact remainder of every per-second conversion, so no fraction of any flow is ever lost.
 
-Every city starts with 1,150 housing, 1,150 service capacity, 500 municipal jobs, 100 E municipal generation, municipal demand of `43 + 0.02 × population` E, 40 units/min municipal waste collection, 38 units/min municipal landfill, air burden 3, landfill damage 1 and no materials or waste. Taxes are 0.11 credits per resident per minute; municipal upkeep is 52 credits per minute.
+Every city starts with three completed Medium Residential Districts (2,280 homes for its 2,000 residents), 2,300 service capacity, 1,000 municipal jobs, 100 E municipal generation, municipal demand of `43 + 0.01 × population` E, 40 units/min municipal waste collection, 38 units/min municipal landfill, air burden 3, landfill damage 1, 30 materials and no waste. Taxes are 0.055 credits per resident per minute; municipal upkeep is 31 credits per minute, and the starting homes pay their own 7 each.
+
+Residents are counted at an 8,000-resident scale: housing, job and service capacities are twice the reference figures and per-resident rates (taxes, electricity, household waste) half, so the economy per city is that of the 4,000-resident reference.
 
 ## 4. Buildings
 
@@ -55,16 +57,17 @@ A tier's values are totals, not increments: a Medium Collection Center collects 
 - **Upgrade** Small → Medium → Large at the configured incremental credits, materials and time. The building keeps operating at its current tier until the upgrade completes.
 - **Cancel** a project to recover 80% of its credits and all of its material units (into stock). A cancelled construction frees its plot; a cancelled upgrade leaves the building at its current tier.
 - **Demolish** a completed building to recover 10% of its tier's credits and no materials. Demolition is rejected if it would leave enabled housing below the current population.
+- **Move** a building, finished or not, to any free plot of its city. Only its plot changes: its project, operation and stored remainders stay with it. Plot order still decides priority within a type.
 - **Disable** a building to stop its output, demand and jobs from that tick. It pays 20% standby upkeep. Re-enabling is free after a 10-second cooldown.
 
 ## 5. Operation each tick
 
-1. **Funding.** Enabled, completed buildings pay full upkeep in staffing priority order, plot order within a type. A Fossil Power Plant's emission levy is part of its operating cost. A building that cannot pay in full does not operate this tick and pays standby upkeep if it can, like a disabled building.
+1. **Funding.** Enabled, completed buildings pay full upkeep, Residential Districts first, then in staffing priority order, plot order within a type. A Fossil Power Plant's emission levy is part of its operating cost. A building that cannot pay in full does not operate this tick and pays standby upkeep if it can, like a disabled building.
 2. **Electricity.** Supply is municipal generation, funded plants and the biogas power produced last tick. Municipal demand is served first, then building classes in the configured priority (collection, sorting, recycling, biogas, landfill, services, plant auxiliaries, factories, commerce), prorated within a class. A building's power share is delivered ÷ requested. Funded buildings request their full nominal demand even when idle. Surplus is neither stored nor sold except through contracts.
-3. **Staffing.** The first `min(population, 500)` residents fill municipal jobs. The rest staff funded, powered buildings in staffing priority order, plot order within a type, up to each building's job slots. A building's staff share is workers ÷ slots. Unpowered buildings employ nobody. Power plants generate their rating regardless of staffing.
+3. **Staffing.** The first `min(population, 1,000)` residents fill municipal jobs. The rest staff funded, powered buildings in staffing priority order, plot order within a type, up to each building's job slots. A building's staff share is workers ÷ slots. Unpowered buildings employ nobody. Residential Districts and Parks have no jobs and need no workers. Power plants generate their rating regardless of staffing.
 4. Each building's operating fraction is `min(power share, staff share)`. Output systems scale nameplate capacity by it; feedstock and cash may lower it further.
 
-If taxes no longer cover municipal upkeep, which is possible below 473 residents, the treasury pays what it can and the shortfall is recorded. The treasury never goes negative.
+Taxes cover the municipal upkeep at any population the migration floor allows. Upkeep the treasury cannot pay is recorded as unpaid; the treasury never goes negative.
 
 ## 6. Production and materials
 
@@ -76,7 +79,7 @@ If taxes no longer cover municipal upkeep, which is possible below 473 residents
 
 ## 7. Waste and progressive valorization
 
-Waste is recyclable, organic or residual. Households generate 0.03 units per resident per minute (50/30/20). Factories and Commercial Districts generate per their tier at their own compositions. Each unit always sits in exactly one place: the street, the dedicated mixed buffer (cap 300), a sorted stream (recyclable cap 250, organic cap 250), the disposal queue, or a sink (recovered materials, digested organics, landfill, export).
+Waste is recyclable, organic or residual. Households generate 0.015 units per resident per minute (50/30/20). Factories and Commercial Districts generate per their tier at their own compositions. Each unit always sits in exactly one place: the street, the dedicated mixed buffer (cap 300), a sorted stream (recyclable cap 250, organic cap 250), the disposal queue, or a sink (recovered materials, digested organics, landfill, export).
 
 Each second, in order:
 
@@ -112,17 +115,17 @@ Throughput always remains limited by capacity, staffing, power, funding and the 
 
 `Satisfaction = 0.35 × Environment + 20 × min(1, employed/P) + 15 × min(1, housing/(1.15 P)) + 15 × reliability + 15 × min(1, services/(1.15 P))`, clamped to 0–100.
 
-- Housing counts funded Residential Districts plus the baseline.
+- Housing counts funded Residential Districts, including the starting homes.
 - Services count the municipal baseline, scaled by its staffing and power, plus operating service buildings.
 - Reliability is domestic power delivered over power requested.
 - The same exact value drives migration. It is first computed at the end of tick 0.
 
 **Migration** happens after the ticks ending at 80, 100, …, 1,180 (56 pulses, none at 1,200), using a frozen post-tick snapshot:
 
-- Every ordered pair whose Satisfaction gap exceeds 0.75 proposes `floor(1.6 × (gap − 0.75))` movers.
+- Every ordered pair whose Satisfaction gap exceeds 0.75 proposes `floor(8 × (gap − 0.75))` movers.
 - Pairs are served by decreasing gap, then destination, then source.
-- Each city sends at most 12 and receives at most 30 per pulse. A sender keeps at least 350 residents, and a receiver accepts only up to its free housing.
-- A resident moves at most once per pulse; the region always holds 4,000.
+- Each city sends at most 60 and receives at most 150 per pulse. A sender keeps at least 700 residents, and a receiver accepts only up to its free housing.
+- A resident moves at most once per pulse; the region always holds 8,000.
 
 ## 10. Marketplace
 
@@ -155,7 +158,7 @@ begin                  crisis state for [t, t+1); per-tick ledgers reset
 construction           projects due at t complete and operate from t
 commands               ordered by receipt tick, seed-rotated seat, sequence; each atomic
 municipal_budget       taxes, then municipal upkeep
-funding                upkeep and fossil levy, staffing priority order
+funding                upkeep and fossil levy: homes, then staffing priority order
 power_generation       own generation (incl. last tick's biogas) and requests
 power_contracts        electricity deliveries and payments
 power_allocation       municipal first, then priority classes
@@ -177,7 +180,7 @@ advance_time           t+1; at 1200 the final result is frozen
 
 After every phase:
 
-- Population totals 4,000 and every city keeps at least 350 residents.
+- Population totals 8,000 and every city keeps at least 700 residents.
 - Cash, available cash, materials and every inventory are non-negative.
 - Every city's cash ledger and material ledger reconcile.
 - Every city's waste mass reconciles: generated + imported = held + recovered + digested + landfilled + exported.

@@ -2,21 +2,22 @@ extends "res://tests/support/harness.gd"
 ## The live configuration loads exactly the B2.1 numbers, and malformed or
 ## inconsistent configurations are rejected rather than repaired.
 
-## Audit §6 catalogue: [credits, materials, seconds, upkeep, jobs, power, primary capacity].
+## Audit §6 catalogue with residents counted at the 8,000 scale (jobs, homes and
+## services doubled): [credits, materials, seconds, upkeep, jobs, power, primary capacity].
 ## Power is demand for consumers and generation for plants.
 const CATALOGUE = {
-	"residential_district": [[125, 9, 25, 4, 0, 0, 180], [235, 17, 43, 7, 0, 0, 380], [380, 28, 65, 11, 0, 0, 670]],
-	"factory": [[175, 12, 28, 22, 155, 26, 145], [315, 22, 48, 38, 285, 47, 265], [495, 36, 73, 61, 450, 75, 410]],
-	"commercial_district": [[145, 8, 25, 14, 100, 14, 75], [260, 14, 43, 26, 185, 26, 137], [425, 23, 66, 43, 300, 42, 222]],
-	"public_services_center": [[125, 8, 27, 8, 24, 9, 230], [220, 14, 44, 15, 40, 16, 470], [355, 24, 65, 25, 65, 25, 760]],
-	"park": [[95, 4, 20, 3, 3, 0, 0.24], [170, 7, 35, 5, 5, 0, 0.43], [280, 12, 53, 9, 8, 0, 0.72]],
-	"collection_center": [[95, 5, 23, 7, 24, 7, 23], [175, 10, 39, 12, 42, 12, 45], [280, 17, 58, 19, 66, 19, 72]],
-	"sorting_center": [[100, 7, 25, 9, 28, 11, 34], [190, 13, 42, 16, 51, 20, 63], [310, 22, 63, 26, 80, 32, 100]],
-	"recycling_center": [[135, 10, 29, 11, 34, 14, 20], [245, 18, 47, 21, 62, 26, 39], [400, 31, 72, 35, 100, 43, 63]],
-	"biogas_facility": [[140, 10, 29, 11, 20, 5, 12], [245, 18, 46, 20, 37, 9, 25], [405, 30, 70, 34, 60, 15, 42]],
-	"landfill": [[90, 5, 21, 6, 14, 4, 28], [165, 9, 36, 10, 24, 7, 53], [270, 15, 55, 16, 39, 11, 86]],
-	"fossil_power_plant": [[120, 7, 25, 15, 12, 90, 90], [220, 13, 43, 27, 21, 170, 170], [360, 22, 64, 43, 32, 275, 275]],
-	"renewable_power_plant": [[205, 10, 32, 6, 10, 75, 75], [365, 18, 55, 11, 18, 145, 145], [590, 30, 83, 18, 29, 235, 235]],
+	"residential_district": [[125, 9, 25, 4, 0, 0, 360], [235, 17, 43, 7, 0, 0, 760], [380, 28, 65, 11, 0, 0, 1340]],
+	"factory": [[175, 12, 28, 22, 310, 26, 145], [315, 22, 48, 38, 570, 47, 265], [495, 36, 73, 61, 900, 75, 410]],
+	"commercial_district": [[145, 8, 25, 14, 200, 14, 75], [260, 14, 43, 26, 370, 26, 137], [425, 23, 66, 43, 600, 42, 222]],
+	"public_services_center": [[125, 8, 27, 8, 48, 9, 460], [220, 14, 44, 15, 80, 16, 940], [355, 24, 65, 25, 130, 25, 1520]],
+	"park": [[95, 4, 20, 3, 0, 0, 0.24], [170, 7, 35, 5, 0, 0, 0.43], [280, 12, 53, 9, 0, 0, 0.72]],
+	"collection_center": [[95, 5, 23, 7, 48, 7, 23], [175, 10, 39, 12, 84, 12, 45], [280, 17, 58, 19, 132, 19, 72]],
+	"sorting_center": [[100, 7, 25, 9, 56, 11, 34], [190, 13, 42, 16, 102, 20, 63], [310, 22, 63, 26, 160, 32, 100]],
+	"recycling_center": [[135, 10, 29, 11, 68, 14, 20], [245, 18, 47, 21, 124, 26, 39], [400, 31, 72, 35, 200, 43, 63]],
+	"biogas_facility": [[140, 10, 29, 11, 40, 5, 12], [245, 18, 46, 20, 74, 9, 25], [405, 30, 70, 34, 120, 15, 42]],
+	"landfill": [[90, 5, 21, 6, 28, 4, 28], [165, 9, 36, 10, 48, 7, 53], [270, 15, 55, 16, 78, 11, 86]],
+	"fossil_power_plant": [[120, 7, 25, 15, 24, 90, 90], [220, 13, 43, 27, 42, 170, 170], [360, 22, 64, 43, 64, 275, 275]],
+	"renewable_power_plant": [[205, 10, 32, 6, 20, 75, 75], [365, 18, 55, 11, 36, 145, 145], [590, 30, 83, 18, 58, 235, 235]],
 }
 const PRIMARY = {"residential_district": "housing", "factory": "income", "commercial_district": "income",
 	"public_services_center": "services", "park": "cleanup", "collection_center": "collection",
@@ -82,16 +83,18 @@ func catalogue(c: Dictionary) -> void:
 		eq(c.buildings[kind].requires, [], kind + " has no prerequisite")
 
 func baseline(c: Dictionary) -> void:
-	eq([c.city.housing, c.city.services, c.city.municipal_jobs], [1150, 1150, 500], "baseline capacities")
-	eq([c.city.generation, c.city.base_demand, c.city.demand_per_resident], [100 * U, 43 * U, 20000], "municipal electricity")
-	eq([c.city.collection, c.city.landfill, c.city.upkeep], [40 * U, 38 * U, 52 * U], "municipal waste and upkeep")
-	eq([c.city.air, c.city.landfill_damage], [3 * U, 1 * U], "starting stocks")
+	eq([c.residents, c.initial_residents], [8000, 2000], "8,000 residents, 2,000 per city")
+	eq(c.city.buildings, [{"type": "residential_district", "size": "M"}, {"type": "residential_district", "size": "M"}, {"type": "residential_district", "size": "M"}], "three Medium Residential Districts")
+	eq([c.city.services, c.city.municipal_jobs], [2300, 1000], "baseline capacities")
+	eq([c.city.generation, c.city.base_demand, c.city.demand_per_resident], [100 * U, 43 * U, 10000], "municipal electricity")
+	eq([c.city.collection, c.city.landfill, c.city.upkeep], [40 * U, 38 * U, 31 * U], "municipal waste and upkeep")
+	eq([c.city.air, c.city.landfill_damage, c.city.materials], [3 * U, 1 * U, 30 * U], "starting stocks")
 	eq([c.economy.tax, c.economy.buy_price, c.economy.sell_price, c.economy.material_cap, c.economy.landfill_fee, c.economy.levy],
-		[110000, 6 * U, 2 * U, 500 * U, 850000, 2 * U], "economy prices")
+		[55000, 6 * U, 2 * U, 500 * U, 850000, 2 * U], "economy prices")
 	eq(c.waste.composition.household, [500000, 300000, 200000], "household composition")
-	eq(c.waste.household, 30000, "household waste per resident")
-	eq(c.migration, {"first": 80, "last": 1180, "interval": 20, "min_gap": 750000, "per_gap_point": 1600000,
-		"source_max": 12, "target_max": 30, "source_min": 350}, "migration rule")
+	eq(c.waste.household, 15000, "household waste per resident")
+	eq(c.migration, {"first": 80, "last": 1180, "interval": 20, "min_gap": 750000, "per_gap_point": 8 * U,
+		"source_max": 60, "target_max": 150, "source_min": 700}, "migration rule")
 	eq(c.foundations.industrial_legacy, {"buildings": [{"type": "factory", "size": "S"}], "credits": 413 * U, "materials": 0}, "Industrial Legacy")
 	eq(c.foundations.circular_foundation, {"buildings": [{"type": "collection_center", "size": "S"}, {"type": "sorting_center", "size": "S"}], "credits": 393 * U, "materials": 0}, "Circular Foundation")
 	eq(c.foundations.energy_pioneer, {"buildings": [{"type": "renewable_power_plant", "size": "S"}], "credits": 395 * U, "materials": 0}, "Energy Pioneer")
@@ -126,3 +129,5 @@ func malformed() -> void:
 	rejects(func(r): r.buildings.erase("park"), "missing building type")
 	rejects(func(r): r.employment.staffing_priority_order.erase("factory"), "staffed type missing from staffing order")
 	rejects(func(r): r.market.min_duration_seconds = 400, "contract durations out of order")
+	rejects(func(r): r.baseline_city.starting_buildings = [{"id": "residential_district", "tier": "S"}], "starting homes below the starting residents")
+	rejects(func(r): r.baseline_city.starting_buildings = [{"id": "sorting_center", "tier": "S"}], "baseline building skipping a prerequisite")

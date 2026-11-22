@@ -8,7 +8,7 @@
     "construction_credits": 405,
     "construction_materials": 30,
     "construction_seconds": 70,
-    "job_slots": 60,
+    "job_slots": 120,
     "maintenance_credits_per_min": 34,
     "power_demand_capacity": 15,
     "upgrade_from_M": {
@@ -24,7 +24,7 @@
     "construction_credits": 245,
     "construction_materials": 18,
     "construction_seconds": 46,
-    "job_slots": 37,
+    "job_slots": 74,
     "maintenance_credits_per_min": 20,
     "power_demand_capacity": 9,
     "upgrade_from_S": {
@@ -40,7 +40,7 @@
     "construction_credits": 140,
     "construction_materials": 10,
     "construction_seconds": 29,
-    "job_slots": 20,
+    "job_slots": 40,
     "maintenance_credits_per_min": 11,
     "power_demand_capacity": 5
    },
@@ -56,7 +56,7 @@
     "construction_credits": 280,
     "construction_materials": 17,
     "construction_seconds": 58,
-    "job_slots": 66,
+    "job_slots": 132,
     "maintenance_credits_per_min": 19,
     "power_demand_capacity": 19,
     "upgrade_from_M": {
@@ -71,7 +71,7 @@
     "construction_credits": 175,
     "construction_materials": 10,
     "construction_seconds": 39,
-    "job_slots": 42,
+    "job_slots": 84,
     "maintenance_credits_per_min": 12,
     "power_demand_capacity": 12,
     "upgrade_from_S": {
@@ -86,7 +86,7 @@
     "construction_credits": 95,
     "construction_materials": 5,
     "construction_seconds": 23,
-    "job_slots": 24,
+    "job_slots": 48,
     "maintenance_credits_per_min": 7,
     "power_demand_capacity": 7
    },
@@ -99,7 +99,7 @@
     "construction_materials": 23,
     "construction_seconds": 66,
     "gross_income_credits_per_min": 222,
-    "job_slots": 300,
+    "job_slots": 600,
     "maintenance_credits_per_min": 43,
     "power_demand_capacity": 42,
     "upgrade_from_M": {
@@ -115,7 +115,7 @@
     "construction_materials": 14,
     "construction_seconds": 43,
     "gross_income_credits_per_min": 137,
-    "job_slots": 185,
+    "job_slots": 370,
     "maintenance_credits_per_min": 26,
     "power_demand_capacity": 26,
     "upgrade_from_S": {
@@ -131,7 +131,7 @@
     "construction_materials": 8,
     "construction_seconds": 25,
     "gross_income_credits_per_min": 75,
-    "job_slots": 100,
+    "job_slots": 200,
     "maintenance_credits_per_min": 14,
     "power_demand_capacity": 14,
     "waste_generated_per_min": 5
@@ -146,7 +146,7 @@
     "construction_seconds": 73,
     "factory_materials_consumed_per_min": 20,
     "gross_income_credits_per_min": 410,
-    "job_slots": 450,
+    "job_slots": 900,
     "maintenance_credits_per_min": 61,
     "power_demand_capacity": 75,
     "upgrade_from_M": {
@@ -163,7 +163,7 @@
     "construction_seconds": 48,
     "factory_materials_consumed_per_min": 13,
     "gross_income_credits_per_min": 265,
-    "job_slots": 285,
+    "job_slots": 570,
     "maintenance_credits_per_min": 38,
     "power_demand_capacity": 47,
     "upgrade_from_S": {
@@ -180,7 +180,7 @@
     "construction_seconds": 28,
     "factory_materials_consumed_per_min": 7,
     "gross_income_credits_per_min": 145,
-    "job_slots": 155,
+    "job_slots": 310,
     "maintenance_credits_per_min": 22,
     "power_demand_capacity": 26,
     "waste_generated_per_min": 14
@@ -193,7 +193,7 @@
     "construction_credits": 360,
     "construction_materials": 22,
     "construction_seconds": 64,
-    "job_slots": 32,
+    "job_slots": 64,
     "maintenance_credits_per_min": 43,
     "power_generated_capacity": 275,
     "upgrade_from_M": {
@@ -207,7 +207,7 @@
     "construction_credits": 220,
     "construction_materials": 13,
     "construction_seconds": 43,
-    "job_slots": 21,
+    "job_slots": 42,
     "maintenance_credits_per_min": 27,
     "power_generated_capacity": 170,
     "upgrade_from_S": {
@@ -221,7 +221,7 @@
     "construction_credits": 120,
     "construction_materials": 7,
     "construction_seconds": 25,
-    "job_slots": 12,
+    "job_slots": 24,
     "maintenance_credits_per_min": 15,
     "power_generated_capacity": 90
    },
@@ -232,7 +232,7 @@
     "construction_credits": 270,
     "construction_materials": 15,
     "construction_seconds": 55,
-    "job_slots": 39,
+    "job_slots": 78,
     "landfill_waste_per_min": 86,
     "maintenance_credits_per_min": 16,
     "power_demand_capacity": 11,
@@ -246,7 +246,7 @@
     "construction_credits": 165,
     "construction_materials": 9,
     "construction_seconds": 36,
-    "job_slots": 24,
+    "job_slots": 48,
     "landfill_waste_per_min": 53,
     "maintenance_credits_per_min": 10,
     "power_demand_capacity": 7,
@@ -260,7 +260,7 @@
     "construction_credits": 90,
     "construction_materials": 5,
     "construction_seconds": 21,
-    "job_slots": 14,
+    "job_slots": 28,
     "landfill_waste_per_min": 28,
     "maintenance_credits_per_min": 6,
     "power_demand_capacity": 4
@@ -273,7 +273,6 @@
     "construction_credits": 280,
     "construction_materials": 12,
     "construction_seconds": 53,
-    "job_slots": 8,
     "maintenance_credits_per_min": 9,
     "park_amenity_points": 2.6,
     "upgrade_from_M": {
@@ -287,7 +286,6 @@
     "construction_credits": 170,
     "construction_materials": 7,
     "construction_seconds": 35,
-    "job_slots": 5,
     "maintenance_credits_per_min": 5,
     "park_amenity_points": 1.7,
     "upgrade_from_S": {
@@ -301,7 +299,6 @@
     "construction_credits": 95,
     "construction_materials": 4,
     "construction_seconds": 20,
-    "job_slots": 3,
     "maintenance_credits_per_min": 3,
     "park_amenity_points": 1
    },
@@ -312,10 +309,10 @@
     "construction_credits": 355,
     "construction_materials": 24,
     "construction_seconds": 65,
-    "job_slots": 65,
+    "job_slots": 130,
     "maintenance_credits_per_min": 25,
     "power_demand_capacity": 25,
-    "service_capacity": 760,
+    "service_capacity": 1520,
     "upgrade_from_M": {
      "additional_credits": 146,
      "additional_materials": 10,
@@ -326,10 +323,10 @@
     "construction_credits": 220,
     "construction_materials": 14,
     "construction_seconds": 44,
-    "job_slots": 40,
+    "job_slots": 80,
     "maintenance_credits_per_min": 15,
     "power_demand_capacity": 16,
-    "service_capacity": 470,
+    "service_capacity": 940,
     "upgrade_from_S": {
      "additional_credits": 103,
      "additional_materials": 6,
@@ -340,10 +337,10 @@
     "construction_credits": 125,
     "construction_materials": 8,
     "construction_seconds": 27,
-    "job_slots": 24,
+    "job_slots": 48,
     "maintenance_credits_per_min": 8,
     "power_demand_capacity": 9,
-    "service_capacity": 230
+    "service_capacity": 460
    },
    "required_completed_buildings": []
   },
@@ -352,7 +349,7 @@
     "construction_credits": 400,
     "construction_materials": 31,
     "construction_seconds": 72,
-    "job_slots": 100,
+    "job_slots": 200,
     "maintenance_credits_per_min": 35,
     "material_yield_fraction": 0.86,
     "power_demand_capacity": 43,
@@ -367,7 +364,7 @@
     "construction_credits": 245,
     "construction_materials": 18,
     "construction_seconds": 47,
-    "job_slots": 62,
+    "job_slots": 124,
     "maintenance_credits_per_min": 21,
     "material_yield_fraction": 0.83,
     "power_demand_capacity": 26,
@@ -382,7 +379,7 @@
     "construction_credits": 135,
     "construction_materials": 10,
     "construction_seconds": 29,
-    "job_slots": 34,
+    "job_slots": 68,
     "maintenance_credits_per_min": 11,
     "material_yield_fraction": 0.8,
     "power_demand_capacity": 14,
@@ -398,7 +395,7 @@
     "construction_credits": 590,
     "construction_materials": 30,
     "construction_seconds": 83,
-    "job_slots": 29,
+    "job_slots": 58,
     "maintenance_credits_per_min": 18,
     "power_generated_capacity": 235,
     "upgrade_from_M": {
@@ -411,7 +408,7 @@
     "construction_credits": 365,
     "construction_materials": 18,
     "construction_seconds": 55,
-    "job_slots": 18,
+    "job_slots": 36,
     "maintenance_credits_per_min": 11,
     "power_generated_capacity": 145,
     "upgrade_from_S": {
@@ -424,7 +421,7 @@
     "construction_credits": 205,
     "construction_materials": 10,
     "construction_seconds": 32,
-    "job_slots": 10,
+    "job_slots": 20,
     "maintenance_credits_per_min": 6,
     "power_generated_capacity": 75
    },
@@ -435,7 +432,7 @@
     "construction_credits": 380,
     "construction_materials": 28,
     "construction_seconds": 65,
-    "housing_capacity": 670,
+    "housing_capacity": 1340,
     "maintenance_credits_per_min": 11,
     "upgrade_from_M": {
      "additional_credits": 157,
@@ -447,7 +444,7 @@
     "construction_credits": 235,
     "construction_materials": 17,
     "construction_seconds": 43,
-    "housing_capacity": 380,
+    "housing_capacity": 760,
     "maintenance_credits_per_min": 7,
     "upgrade_from_S": {
      "additional_credits": 119,
@@ -459,7 +456,7 @@
     "construction_credits": 125,
     "construction_materials": 9,
     "construction_seconds": 25,
-    "housing_capacity": 180,
+    "housing_capacity": 360,
     "maintenance_credits_per_min": 4
    },
    "required_completed_buildings": []
@@ -469,7 +466,7 @@
     "construction_credits": 310,
     "construction_materials": 22,
     "construction_seconds": 63,
-    "job_slots": 80,
+    "job_slots": 160,
     "maintenance_credits_per_min": 26,
     "power_demand_capacity": 32,
     "sort_capture_organic": 0.86,
@@ -486,7 +483,7 @@
     "construction_credits": 190,
     "construction_materials": 13,
     "construction_seconds": 42,
-    "job_slots": 51,
+    "job_slots": 102,
     "maintenance_credits_per_min": 16,
     "power_demand_capacity": 20,
     "sort_capture_organic": 0.81,
@@ -503,7 +500,7 @@
     "construction_credits": 100,
     "construction_materials": 7,
     "construction_seconds": 25,
-    "job_slots": 28,
+    "job_slots": 56,
     "maintenance_credits_per_min": 9,
     "power_demand_capacity": 11,
     "sort_capture_organic": 0.75,
@@ -613,5 +610,5 @@
  "ruleset": "B2.1",
  "services_slack": 1.15,
  "source": "config/balance/B2_1.json",
- "source_sha256": "60221a06de3d91fd6e552bb82ff4fd5491fab77bd289bca9755676190f7b1c8f"
+ "source_sha256": "8f2c9e15f613030c64e20820e18f40c166248910a8b1f6aad8ade631168657c9"
 }

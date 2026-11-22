@@ -1,6 +1,7 @@
 extends RefCounted
-## Foundation draft, then the match. Seats pick a unique Foundation in a seeded
-## random order; the fourth pick creates the authoritative match.
+## Foundation draft, then the match. Human seats pick a unique Foundation first, in
+## a seeded random order; bot seats follow, also in seeded order, from what is left.
+## The fourth pick creates the authoritative match.
 const Sim = preload("res://simulation/match.gd")
 const Random = preload("res://simulation/core/seeded_random.gd")
 const Envelope = preload("res://simulation/core/command_envelope.gd")
@@ -8,7 +9,7 @@ const CARDS = ["industrial_legacy", "circular_foundation", "energy_pioneer", "in
 var engine: RefCounted
 var draft: Dictionary = {}
 
-func create(match_id: String, seed_value: int) -> String:
+func create(match_id: String, seed_value: int, bot_seats: Array = []) -> String:
 	if not draft.is_empty():
 		return "already_initialized"
 	if match_id.is_empty():
@@ -20,6 +21,7 @@ func create(match_id: String, seed_value: int) -> String:
 		var swap: int = order[i]
 		order[i] = order[j]
 		order[j] = swap
+	order = order.filter(func(seat): return seat not in bot_seats) + order.filter(func(seat): return seat in bot_seats)
 	draft = {"match_id": match_id, "seed": seed_value, "status": "draft", "order": order,
 		"choices": [null, null, null, null], "turn": 0, "results": {}, "last_seq": [-1, -1, -1, -1]}
 	return ""

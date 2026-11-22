@@ -10,6 +10,7 @@ func _initialize() -> void:
 	baseline_minute()
 	factory_inputs()
 	staffing()
+	parks_need_no_workers()
 	electricity()
 	environment()
 	crises()
@@ -22,20 +23,24 @@ func baseline_minute() -> void:
 	advance(m, 1)
 	var c: Dictionary = city(m, INVESTMENT)
 	var parts: Dictionary = c.satisfaction_components_micro
-	eq([parts.employment, parts.housing, parts.services, parts.power], [10 * U, 15 * U, 15 * U, 15 * U], "baseline employment 500/1000, full housing, services and power")
+	var homes: int = 15 * A.mul(2280 * U, U, 2300 * U)
+	eq([parts.employment, parts.housing, parts.services, parts.power], [10 * U, homes, 15 * U, 15 * U],
+		"baseline employment 1,000/2,000, 2,280 homes of the 2,300 slack target, full services and power")
 	eq(fixture()._state.cities[INVESTMENT].environment_micro, 96 * U, "starting Environment 100 - 3 air - 1 landfill = 96")
-	eq(A.mul(35 * 96 * U, 1, 100) + 55 * U, 88600000, "so neutral starting Satisfaction is 33.6 + 55 = 88.6")
-	eq(c.satisfaction_micro, parts.environment + 55 * U, "after one second only Environment has moved")
+	eq(A.mul(35 * 96 * U, 1, 100) + 40 * U + homes, 88469560, "so neutral starting Satisfaction is 33.6 + 10 + 14.86956 + 15 + 15")
+	eq(c.satisfaction_micro, parts.environment + 40 * U + homes, "after one second only Environment has moved")
 	eq(parts.environment, A.mul(35 * c.environment_micro, 1, 100), "Environment weighs 35 points")
 	advance(m, 59)
 	c = city(m, INVESTMENT)
-	eq([c.finance.totals.taxes, c.finance.totals.municipal_upkeep], [110 * U, 52 * U], "0.11 per resident and 52 upkeep per minute")
-	eq(city(m, INDUSTRIAL).finance.totals.building_upkeep, 22 * U, "factory upkeep 22 per minute")
-	eq(c.power.municipal_requested_micro_E, 63 * U, "municipal demand 43 + 0.02 x 1000")
-	eq(c.waste.totals.generated, 30 * U, "households generate 0.03 per resident per minute")
+	eq([c.finance.totals.taxes, c.finance.totals.municipal_upkeep], [110 * U, 31 * U], "0.055 per resident and 31 upkeep per minute")
+	eq(c.finance.totals.building_upkeep, 21 * U, "the three Medium homes cost 7 a minute each")
+	eq(city(m, INDUSTRIAL).finance.totals.building_upkeep, 43 * U, "factory upkeep 22 plus the homes' 21 per minute")
+	eq(c.power.municipal_requested_micro_E, 63 * U, "municipal demand 43 + 0.01 x 2000")
+	eq(c.waste.totals.generated, 30 * U, "households generate 0.015 per resident per minute")
 
 func factory_inputs() -> void:
 	var m = fixture()
+	set_materials(city(m, INDUSTRIAL), 0)
 	advance(m, 60)
 	var c: Dictionary = city(m, INDUSTRIAL)
 	var f: Dictionary = c.finance.totals
@@ -49,6 +54,7 @@ func factory_inputs() -> void:
 	eq([c.materials.used, c.materials.purchased, c.finance.totals.material_purchases, c.materials_micro], [7 * U, 0, 0, 93 * U], "stocked materials feed the factory first")
 	var broke = fixture()
 	set_cash(city(broke, INDUSTRIAL), 0)
+	set_materials(city(broke, INDUSTRIAL), 0)
 	advance(broke, 1)
 	c = city(broke, INDUSTRIAL)
 	var factory: Dictionary = first(broke, INDUSTRIAL, "factory")
@@ -66,11 +72,32 @@ func staffing() -> void:
 	advance(m, 1)
 	c = city(m, INVESTMENT)
 	var factories: Array = of_type(c, "factory")
-	eq(of_type(c, "fossil_power_plant")[0].op.workers, 32, "the plant is staffed before factories")
-	eq(factories.map(func(x): return x.op.workers), [155, 155, 155, 3], "factories staff in plot order from 468 remaining workers")
-	eq(factories[3].op.staff_micro, A.mul(3, U, 155), "the last factory runs at 3/155 staff")
+	eq(of_type(c, "fossil_power_plant")[0].op.workers, 64, "the plant is staffed before factories")
+	eq(factories.map(func(x): return x.op.workers), [310, 310, 310, 6], "factories staff in plot order from 936 remaining workers")
+	eq(factories[3].op.staff_micro, A.mul(6, U, 310), "the last factory runs at 6/310 staff")
 	eq(factories[3].op.fraction_micro, factories[3].op.staff_micro, "operation follows the staff share")
-	eq([c.employment.municipal, c.employment.buildings, c.satisfaction_components_micro.employment], [500, 500, 20 * U], "every resident employed")
+	eq([c.employment.municipal, c.employment.buildings, c.satisfaction_components_micro.employment], [1000, 1000, 20 * U], "every resident employed")
+
+## Parks have no job slots at any tier: in a city whose every resident already
+## works elsewhere, a Park still runs fully, employs nobody and cleans the air.
+func parks_need_no_workers() -> void:
+	var config: Dictionary = Balance.load_config()
+	for size in Balance.SIZES:
+		eq(config.buildings.park[size].jobs, 0, "a %s Park has no jobs" % size)
+	var m = fixture()
+	var c: Dictionary = city(m, INVESTMENT)
+	place(m, c, "fossil_power_plant", "L")
+	for i in range(4):
+		place(m, c, "factory")
+	var park: Dictionary = place(m, c, "park", "L")
+	set_cash(c, 5000 * U)
+	advance(m, 1)
+	c = city(m, INVESTMENT)
+	park = of_type(c, "park")[0]
+	eq([park.op.workers, park.op.staff_micro, park.op.fraction_micro], [0, U, U], "the Park runs fully with no workers")
+	eq(c.employment.municipal + c.employment.buildings, c.population, "every resident still works elsewhere")
+	eq(of_type(c, "factory").map(func(x): return x.op.workers), [310, 310, 310, 6], "the Park takes no worker from the factories")
+	check(c.amenity_micro > 0, "and it adds amenity")
 
 func electricity() -> void:
 	var m = fixture()
@@ -132,7 +159,7 @@ func crises() -> void:
 	var generated: int = city(m, ENERGY).waste.totals.generated
 	var residents: int = city(m, ENERGY).population
 	advance(m, 20)
-	eq(city(m, ENERGY).waste.totals.generated - generated, 15000 * residents, "waste surge: household waste x1.5 (0.045 per resident per minute)")
+	eq(city(m, ENERGY).waste.totals.generated - generated, 7500 * residents, "waste surge: household waste x1.5 (0.0225 per resident per minute)")
 	m._state.tick = 900
 	advance(m, 1)
 	eq(city(m, ENERGY).power.municipal_micro_E, 55 * U, "power shortage: municipal output x0.55")
@@ -157,11 +184,25 @@ func materials() -> void:
 	eq(act(m, CIRCULAR, "sell_materials", {"amount": 900 * U}), "insufficient_materials", "cannot sell more than the stock")
 	eq(act(m, CIRCULAR, "sell_materials", {"amount": 0}), "invalid_payload", "nothing to sell")
 
+## At the 700-resident floor taxes (38.5 a minute) still cover the municipal upkeep (31).
+## A treasury emptied by buildings keeps its homes first: they are funded before
+## anything else, and what cannot be paid is recorded, never borrowed.
 func municipal_shortfall() -> void:
 	var m = fixture()
-	city(m, INVESTMENT).population = 400
-	city(m, ENERGY).population = 1600
+	city(m, INVESTMENT).population = 700
+	city(m, ENERGY).population = 3300
 	set_cash(city(m, INVESTMENT), 0)
-	check(advance(m, 120), "a city whose taxes no longer cover upkeep keeps running")
+	check(advance(m, 120), "a city at the resident floor with no cash keeps running")
 	var c: Dictionary = city(m, INVESTMENT)
-	check(c.finance.unpaid_municipal_upkeep > 0 and c.money_micro >= 0, "unpaid municipal upkeep is recorded; the treasury stays non-negative")
+	eq(c.finance.unpaid_municipal_upkeep, 0, "taxes at the floor still cover municipal upkeep")
+	check(c.money_micro >= 0, "the treasury stays non-negative")
+	var broke = fixture()
+	c = city(broke, INVESTMENT)
+	for i in range(4):
+		place(broke, c, "factory", "L")
+	set_cash(c, 0)
+	advance(broke, 1)
+	c = city(broke, INVESTMENT)
+	check(of_type(c, "residential_district").all(func(x): return x.op.funded), "homes are paid before costly buildings")
+	check(not of_type(c, "factory").all(func(x): return x.op.funded), "buildings the treasury cannot cover go unfunded")
+	eq(c.capacity.housing, 2280, "so the city keeps housing its residents")

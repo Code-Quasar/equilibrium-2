@@ -31,24 +31,24 @@ func schedule(rule: Dictionary) -> void:
 	check(not Migration.due(rule, 1200), "no pulse at match end")
 
 func pairs(rule: Dictionary) -> void:
-	eq(moved(rule, [[80, 1000, 1150], [80, 1000, 1150], [80, 1000, 1150], [80, 1000, 1150]]), [1000, 1000, 1000, 1000], "equal Satisfaction: nobody moves")
-	eq(moved(rule, [[86, 1000, 1150], [80, 1000, 1150], [80, 1000, 1150], [80, 1000, 1150]]), [1024, 992, 992, 992], "+6 gap moves floor(1.6 x 5.25) = 8 from each rival")
-	eq(moved(rule, [[80.75, 1000, 1150], [80, 1000, 1150], [80, 1000, 1150], [80, 1000, 1150]]), [1000, 1000, 1000, 1000], "a gap of exactly 0.75 moves nobody")
-	eq(moved(rule, [[81.375, 1000, 1150], [80, 1000, 1150], [80, 1000, 1150], [80, 1000, 1150]]), [1003, 999, 999, 999], "gap 1.375 moves one resident per pair")
-	eq(moved(rule, [[90, 1000, 1150], [85, 1000, 1150], [80, 1000, 1150], [80, 1000, 1150]]), [1030, 994, 988, 988],
-		"largest gaps first: city 0 takes 12 + 12 from cities 2 and 3, then 6 from city 1 up to its 30 limit; 2 and 3 have nothing left for city 1")
+	eq(moved(rule, [[80, 2000, 2300], [80, 2000, 2300], [80, 2000, 2300], [80, 2000, 2300]]), [2000, 2000, 2000, 2000], "equal Satisfaction: nobody moves")
+	eq(moved(rule, [[86, 2000, 2300], [80, 2000, 2300], [80, 2000, 2300], [80, 2000, 2300]]), [2126, 1958, 1958, 1958], "+6 gap moves floor(8 x 5.25) = 42 from each rival")
+	eq(moved(rule, [[80.75, 2000, 2300], [80, 2000, 2300], [80, 2000, 2300], [80, 2000, 2300]]), [2000, 2000, 2000, 2000], "a gap of exactly 0.75 moves nobody")
+	eq(moved(rule, [[81.375, 2000, 2300], [80, 2000, 2300], [80, 2000, 2300], [80, 2000, 2300]]), [2015, 1995, 1995, 1995], "gap 1.375 moves floor(8 x 0.625) = 5 per pair")
+	eq(moved(rule, [[90, 2000, 2300], [85, 2000, 2300], [80, 2000, 2300], [80, 2000, 2300]]), [2150, 1970, 1940, 1940],
+		"largest gaps first: city 0 takes 60 + 60 from cities 2 and 3, then 30 from city 1 up to its 150 limit; 2 and 3 have nothing left for city 1")
 
 func limits(rule: Dictionary) -> void:
-	eq(moved(rule, [[100, 1000, 1150], [80, 1000, 1150], [80, 1000, 1150], [80, 1000, 1150]]), [1030, 988, 988, 994], "12 per sender and 30 per receiver")
-	eq(moved(rule, [[100, 1000, 1150], [80, 355, 1150], [99, 1645, 1150], [99, 1000, 1150]]), [1005, 350, 1645, 1000], "senders never drop below 350")
-	eq(moved(rule, [[100, 1147, 1150], [80, 1000, 1150], [80, 1000, 1150], [80, 853, 1150]]), [1150, 997, 1000, 853], "arrivals stop at free housing")
-	eq(moved(rule, [[100, 1200, 1150], [80, 1000, 1150], [80, 1000, 1150], [80, 800, 1150]]), [1200, 1000, 1000, 800], "an over-full city receives nobody")
+	eq(moved(rule, [[100, 2000, 2300], [80, 2000, 2300], [80, 2000, 2300], [80, 2000, 2300]]), [2150, 1940, 1940, 1970], "60 per sender and 150 per receiver")
+	eq(moved(rule, [[100, 2000, 2300], [80, 705, 2300], [99.5, 3295, 2300], [99.5, 2000, 2300]]), [2005, 700, 3295, 2000], "senders never drop below 700")
+	eq(moved(rule, [[100, 2297, 2300], [80, 2000, 2300], [80, 2000, 2300], [80, 1703, 2300]]), [2300, 1997, 2000, 1703], "arrivals stop at free housing")
+	eq(moved(rule, [[100, 2400, 2300], [80, 2000, 2300], [80, 2000, 2300], [80, 1600, 2300]]), [2400, 2000, 2000, 1600], "an over-full city receives nobody")
 
 func in_match() -> void:
 	var m = fixture()
 	advance(m, 100)
 	eq(m._state.migrations.map(func(p): return p.time), [80, 100], "pulses recorded at 80 and 100")
-	eq(A.total(m._state.cities.map(func(c): return c.population)), 4000, "region keeps 4,000 residents")
+	eq(A.total(m._state.cities.map(func(c): return c.population)), 8000, "region keeps 8,000 residents")
 
 func ranking() -> void:
 	var state: Dictionary = {"cities": [

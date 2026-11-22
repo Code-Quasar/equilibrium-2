@@ -24,7 +24,7 @@ static func create(match_id: String, seed_value: int, foundations: Array, b: Dic
 			"air_micro": b.city.air, "landfill_damage_micro": b.city.landfill_damage, "pressure_micro": 0,
 			"amenity_micro": 0, "environment_micro": 100 * A.S - b.city.air - b.city.landfill_damage,
 			"satisfaction_micro": null, "satisfaction_components_micro": {},
-			"capacity": {"housing": b.city.housing, "services_micro": b.city.services * A.S, "employed": 0},
+			"capacity": {"housing": 0, "services_micro": b.city.services * A.S, "employed": 0},
 			"employment": {"municipal": 0, "buildings": 0}, "power": {}, "biogas_pending_micro_E": 0, "carries": {}}
 		city.projects.resize(b.construction.slots)
 		Finance.initialize(city, package.credits)
@@ -35,9 +35,10 @@ static func create(match_id: String, seed_value: int, foundations: Array, b: Dic
 				"buildings_delivered_micro_E", "unused_micro_E"]:
 			city.power[key] = 0
 		city.power["reliability_micro"] = A.S
-		for start in package.buildings:
+		for start in b.city.buildings + package.buildings:
 			city.buildings.append(Buildings.record(city.next_building_id, start.type, start.size, city.next_building_id, 0, true))
 			city.next_building_id += 1
+			city.capacity.housing += b.buildings[start.type][start.size].housing
 		cities.append(city)
 	var state: Dictionary = {"match_id": match_id, "seed": seed_value, "tick": 0, "status": "running",
 		"foundations": foundations.duplicate(), "cities": cities, "crisis": {}, "migrations": [],

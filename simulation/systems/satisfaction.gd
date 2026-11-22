@@ -17,7 +17,7 @@ func _init(config: Dictionary, buildings: RefCounted, operation: RefCounted) -> 
 func update(state: Dictionary, _ctx: Dictionary) -> String:
 	var w: Dictionary = b.satisfaction
 	for city in state.cities:
-		var housing: int = b.city.housing
+		var housing: int = 0
 		var services: int = A.mul(b.city.services * A.S, operations.municipal_service_fraction(city))
 		for building in city.buildings:
 			if building.op.funded:

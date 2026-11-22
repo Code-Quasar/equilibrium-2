@@ -1,6 +1,7 @@
 extends SceneTree
 ## Screenshots of the screens that need no server: menu, address errors,
-## How to Play (top and scrolled), Settings. Also checks address validation.
+## How to Play (top and scrolled), Settings. Also checks address validation and
+## the address boxes: numbers only, automatic jumps, paste, cursor movement.
 ##
 ##   godot --path client/godot --script res://tests/menu_shots.gd -- /tmp/shots 1170x540
 
@@ -46,6 +47,51 @@ func _check_addresses() -> void:
 	print("address checks: ", "ok" if failures == 0 else "%d failed" % failures)
 
 
+## The address boxes on the menu, driven as typing would drive them.
+func _check_address_field() -> void:
+	var af: AddressField = _find(app.screen, "AddressField")[0]
+	var p := af.parts
+	p[0].grab_focus()
+	p[0].text = "192"
+	p[0].text_changed.emit("192")
+	_expect(str(p[1].has_focus()), "true")             # three digits jump on
+	p[1].text = "16a8"
+	p[1].text_changed.emit("16a8")
+	_expect(p[1].text, "168")                         # letters are dropped
+	p[1].text = "168."
+	p[1].text_changed.emit("168.")
+	_expect(p[1].text, "168")                         # "." is drawn, not typed...
+	_expect(str(p[2].has_focus()), "true")             # ...and moves on
+	p[2].text = "10.0.0.5:9081"
+	p[2].text_changed.emit(p[2].text)                 # a pasted address fills every box
+	_expect(af.address(), "10.0.0.5:9081")
+	_expect(af.problem(), "")
+	p[4].text = "99999"
+	_expect(str(af.validate()), "false")              # port out of range
+	p[4].text = "80x"
+	p[4].text_changed.emit("80x")
+	_expect(p[4].text, "80")                          # port: numbers only
+	p[3].text = "300"
+	_expect(af.problem(), "Each IP number is 0 to 255")
+	# The caret moves both ways inside a box.
+	p[3].text = "123"
+	var left := InputEventKey.new(); left.keycode = KEY_LEFT; left.pressed = true
+	p[3].grab_focus()
+	p[3].deselect()                                   # focusing selects the number; tap again to place the caret
+	p[3].caret_column = 3
+	p[3].get_viewport().push_input(left)
+	_expect(str(p[3].caret_column), "2")
+	var right := InputEventKey.new(); right.keycode = KEY_RIGHT; right.pressed = true
+	p[3].get_viewport().push_input(right)
+	_expect(str(p[3].caret_column), "3")
+	# A clean field again, then an invalid one for the screenshot.
+	af.set_address("192.168.1.20:9080")
+	_expect(af.problem(), "")
+	p[2].text = ""
+	af.validate()
+	print("address field checks: ", "ok" if failures == 0 else "%d failed" % failures)
+
+
 func _expect(a: String, b: String) -> void:
 	if a != b:
 		failures += 1
@@ -71,9 +117,7 @@ func _process(delta: float) -> bool:
 		0:
 			if t > 2.5:
 				shot("m1_menu")
-				var f: LineEdit = _find(app.screen, "LineEdit")[0]
-				f.text = "192.168.1:90x"
-				f.text_submitted.emit(f.text)
+				_check_address_field()
 				step += 1; t = 0
 		1:
 			if t > 0.5:

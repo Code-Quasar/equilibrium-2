@@ -534,6 +534,66 @@
               "pattern": "^[a-zA-Z0-9_-]+$"
             },
             "kind": {
+              "const": "move"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "building_id": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000000000
+                },
+                "tile": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 35
+                }
+              },
+              "required": [
+                "building_id",
+                "tile"
+              ],
+              "additionalProperties": false
+            },
+            "observed_tick": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1200
+            }
+          },
+          "required": [
+            "v",
+            "type",
+            "correlation_id",
+            "action_id",
+            "kind",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "v": {
+              "const": 1
+            },
+            "type": {
+              "const": "submit_action"
+            },
+            "correlation_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "action_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "kind": {
               "const": "cancel_project"
             },
             "payload": {

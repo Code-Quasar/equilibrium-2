@@ -13,7 +13,7 @@ var view_seq: int = 0
 var failed: bool = false
 func initialize(match_id: String, seed_value: int, bot_seats: Array) -> String:
 	bots = bot_seats.duplicate()
-	var error: String = game.create(match_id,seed_value)
+	var error: String = game.create(match_id,seed_value,bots)
 	if error == "": Bots.draft(game,gateway,bots)
 	return error
 func draft_view() -> Dictionary:

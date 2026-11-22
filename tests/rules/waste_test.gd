@@ -12,10 +12,12 @@ func _initialize() -> void:
 	landfill_rules()
 	finish("Waste")
 
-## A city with the given operating facilities and nothing else running.
+## A city with the given operating facilities, nothing else running and no
+## starting materials, so every unit in stock was recovered here.
 func bench(kinds: Array) -> Array:
 	var m = fixture()
 	var c: Dictionary = city(m, SEAT)
+	set_materials(c, 0)
 	for kind in kinds:
 		operate(place(m, c, kind))
 	return [m, c]
@@ -59,7 +61,7 @@ func reference_chain() -> void:
 	eq(results, [8 * U, 19776000, 69235200], "cumulative recovery 8 -> 19.776 -> 69.2352")
 	check(results[0] < results[1] and results[1] < results[2], "each built stage recovers more")
 
-## Audit §8: 1,000 residents with Small Collection, Sorting, Recycling and Biogas for one minute.
+## Audit §8 at the 8,000-resident scale: 2,000 residents (0.015 units each a minute) with Small Collection, Sorting, Recycling and Biogas for one minute.
 func household_minute() -> void:
 	var bench_city: Array = bench(["collection_center", "sorting_center", "recycling_center", "biogas_facility"])
 	var m = bench_city[0]

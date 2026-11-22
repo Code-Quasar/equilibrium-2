@@ -14,6 +14,7 @@ const PAYLOADS = {
 	"construct":{"building_type":TYPE_STRING,"size":TYPE_STRING},
 	"upgrade":{"building_id":TYPE_INT},"disable":{"building_id":TYPE_INT},
 	"enable":{"building_id":TYPE_INT},"demolish":{"building_id":TYPE_INT},"cancel_project":{"building_id":TYPE_INT},
+	"move":{"building_id":TYPE_INT,"tile":TYPE_INT},
 	"sell_materials":{"amount":TYPE_INT},
 	"publish_offer":{"type":TYPE_STRING,"rate":TYPE_INT},
 	"withdraw_offer":{"id":TYPE_INT},"accept_offer":{"id":TYPE_INT},"cancel_contract":{"id":TYPE_INT}

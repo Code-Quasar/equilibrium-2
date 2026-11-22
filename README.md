@@ -2,7 +2,7 @@
 
 ### Deterministic circular-economy strategy game
 
-Four cities compete for one region of 4,000 residents over a 20-minute match. Each city builds housing, jobs, services and power, and turns its waste into materials and energy through a Collection → Sorting → Recycling chain. Residents move toward the most satisfying cities, and the city with the most residents at the end wins.
+Four cities compete for one region of 8,000 residents over a 20-minute match. Each city builds housing, jobs, services and power, and turns its waste into materials and energy through a Collection → Sorting → Recycling chain. Residents move toward the most satisfying cities, and the city with the most residents at the end wins.
 
 Satisfaction combines Environment, employment, housing, power reliability and public services. Every economic choice reaches the same objective through it: what a city builds, how it treats its waste, how it powers itself and what it trades with rivals.
 

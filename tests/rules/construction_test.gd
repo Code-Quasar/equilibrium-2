@@ -12,9 +12,11 @@ func _initialize() -> void:
 	rejected_commands_leave_no_trace()
 	prices_and_slots()
 	upgrades()
+	upgrade_continuity()
 	cancellation()
 	demolition()
 	disabling()
+	moving()
 	finish("Construction")
 
 ## What a rejected construction could have touched.
@@ -28,14 +30,18 @@ func foundations() -> void:
 	eq(of_type(cities[INDUSTRIAL], "factory").map(func(x): return [x.size, x.status]), [["S", "complete"]], "Industrial starts with a Small Factory")
 	eq(cities[INDUSTRIAL].money_micro, 413 * U, "Industrial cash")
 	eq(cities[CIRCULAR].buildings.map(func(x): return [x.type, x.size, x.status, x.tile]),
-		[["collection_center", "S", "complete", 0], ["sorting_center", "S", "complete", 1]], "Circular starts with a completed Collection and Sorting chain")
+		[["residential_district", "M", "complete", 0], ["residential_district", "M", "complete", 1], ["residential_district", "M", "complete", 2],
+		["collection_center", "S", "complete", 3], ["sorting_center", "S", "complete", 4]], "Circular starts with its homes, then a completed Collection and Sorting chain")
 	eq(of_type(cities[CIRCULAR], "recycling_center").size(), 0, "Circular has no Recycling Center")
 	eq(cities[CIRCULAR].money_micro, 393 * U, "Circular cash")
 	eq(of_type(cities[ENERGY], "renewable_power_plant").size(), 1, "Energy starts with a Renewable plant")
 	eq(cities[ENERGY].money_micro, 395 * U, "Energy cash")
-	eq([cities[INVESTMENT].buildings.size(), cities[INVESTMENT].money_micro], [0, 660 * U], "Investment starts empty with 660")
+	eq([cities[INVESTMENT].buildings.size(), cities[INVESTMENT].money_micro], [3, 660 * U], "Investment starts with only its homes and 660")
 	for c in cities:
-		eq([c.population, c.materials_micro, c.projects], [1000, 0, [null, null]], "common starting state %d" % c.city_id)
+		eq([c.population, c.materials_micro, c.projects], [2000, 30 * U, [null, null]], "common starting state %d" % c.city_id)
+		eq(of_type(c, "residential_district").map(func(x): return [x.size, x.status, x.enabled]), [["M", "complete", true], ["M", "complete", true], ["M", "complete", true]],
+			"city %d houses its residents in three Medium Residential Districts" % c.city_id)
+		eq(c.capacity.housing, 2280, "city %d starts with 2,280 homes for 2,000 residents" % c.city_id)
 	eq(act(m, CIRCULAR, "construct", {"building_type": "recycling_center", "size": "S"}), "applied", "Circular may start a Recycling Center at once")
 	var duplicate = Sim.new()
 	eq(duplicate.initialize("dup", 1, ["energy_pioneer", "energy_pioneer", "industrial_legacy", "investment_district"]), "invalid_match_setup", "duplicate Foundations rejected")
@@ -84,12 +90,14 @@ func rejected_commands_leave_no_trace() -> void:
 		eq(footprint(city(m, item[0])), before, "no credits, materials, plot or slot used by " + item[2])
 	var poor = fixture()
 	set_cash(city(poor, INVESTMENT), 246 * U)
+	set_materials(city(poor, INVESTMENT), 0)
 	eq(act(poor, INVESTMENT, "construct", {"building_type": "factory", "size": "S"}), "insufficient_funds", "247 credits needed with no stocked materials")
 	var c: Dictionary = city(poor, INVESTMENT)
-	eq([c.buildings.size(), c.projects, c.finance.totals.construction], [0, [null, null], 0], "unaffordable construction changes nothing")
+	eq([c.buildings.size(), c.projects, c.finance.totals.construction], [3, [null, null], 0], "unaffordable construction changes nothing")
 
 func prices_and_slots() -> void:
 	var m = fixture()
+	set_materials(city(m, INVESTMENT), 0)
 	var before: int = city(m, INVESTMENT).money_micro
 	eq(act(m, INVESTMENT, "construct", {"building_type": "factory", "size": "S"}), "applied", "factory S")
 	var c: Dictionary = city(m, INVESTMENT)
@@ -109,6 +117,7 @@ func prices_and_slots() -> void:
 func upgrades() -> void:
 	var m = fixture()
 	set_cash(city(m, CIRCULAR), 2000 * U)
+	set_materials(city(m, CIRCULAR), 0)
 	var id: int = first(m, CIRCULAR, "collection_center").id
 	eq(m.buildings.tier(building(m, CIRCULAR, id)).collection, 23 * U, "Small collection 23/min")
 	eq(act(m, CIRCULAR, "upgrade", {"building_id": id}), "applied", "upgrade S to M")
@@ -126,6 +135,33 @@ func upgrades() -> void:
 	collection = building(m, CIRCULAR, id)
 	eq([collection.size, m.buildings.tier(collection).collection], ["L", 72 * U], "Large total is 72/min")
 	eq(act(m, CIRCULAR, "upgrade", {"building_id": id}), "maximum_size", "Large is the last tier")
+
+## Two identical matches, one upgrading its Collection Center: until the upgrade
+## completes both collect exactly the same, so the Small building neither stops
+## nor runs twice; from the completion tick the upgraded one collects at the
+## Medium rate while the other stays Small.
+func upgrade_continuity() -> void:
+	var plain = fixture()
+	var upgraded = fixture()
+	for m in [plain, upgraded]:
+		set_cash(city(m, CIRCULAR), 5000 * U)
+		add_street(city(m, CIRCULAR), [500 * U, 500 * U, 500 * U])
+	var id: int = first(upgraded, CIRCULAR, "collection_center").id
+	eq(act(upgraded, CIRCULAR, "upgrade", {"building_id": id}), "applied", "upgrade started")
+	act(plain, CIRCULAR, "construct", {"building_type": "park", "size": "S"})
+	var done: int = city(upgraded, CIRCULAR).projects.filter(func(p): return p != null)[0].complete_tick
+	var same := true
+	while upgraded._state.tick < done:
+		advance(plain, 1)
+		advance(upgraded, 1)
+		same = same and city(plain, CIRCULAR).waste.tick.collected == city(upgraded, CIRCULAR).waste.tick.collected 			and building(upgraded, CIRCULAR, id).op.fraction_micro == A.S and building(upgraded, CIRCULAR, id).size == "S"
+	check(same, "the Small Collection Center collects exactly as before, fully operating, until its upgrade completes")
+	var before: int = city(upgraded, CIRCULAR).waste.totals.collected
+	advance(plain, 60)
+	advance(upgraded, 60)
+	eq(building(upgraded, CIRCULAR, id).size, "M", "the Medium tier is in place")
+	eq(city(upgraded, CIRCULAR).waste.totals.collected - before, 45 * U, "from the completion tick it collects 45 a minute, the Medium total")
+	check(city(upgraded, CIRCULAR).waste.totals.collected > city(plain, CIRCULAR).waste.totals.collected, "and more than the city that did not upgrade")
 
 func cancellation() -> void:
 	var m = fixture()
@@ -179,3 +215,39 @@ func disabling() -> void:
 	advance(m, 8)
 	eq(act(m, CIRCULAR, "enable", {"building_id": id}), "applied", "re-enabled after 10 s")
 	eq([building(m, CIRCULAR, id).op.funded, city(m, CIRCULAR).waste.tick.collected > 0], [true, true], "collection resumes")
+
+## Moving changes only a building's plot: nothing is duplicated, lost or reset,
+## and the server rejects plots that are taken or out of range, and buildings the
+## city does not own (building ids are per city, so a seat only addresses its own).
+func moving() -> void:
+	var m = fixture()
+	set_cash(city(m, CIRCULAR), 2000 * U)
+	var collector: Dictionary = first(m, CIRCULAR, "collection_center")
+	var id: int = collector.id
+	eq(act(m, CIRCULAR, "upgrade", {"building_id": id}), "applied", "an upgrade under way")
+	var before: Dictionary = city(m, CIRCULAR)
+	var count: int = before.buildings.size()
+	var cash: int = before.money_micro
+	var taken: int = first(m, CIRCULAR, "sorting_center").tile
+	var invalid := [
+		[{"building_id": id, "tile": taken}, "tile_occupied"],
+		[{"building_id": id, "tile": collector.tile}, "tile_occupied"],
+		[{"building_id": id, "tile": 36}, "invalid_tile"],
+		[{"building_id": id, "tile": -1}, "invalid_tile"],
+		[{"building_id": id}, "invalid_payload"],
+		[{"building_id": first(m, INDUSTRIAL, "factory").id + 1000, "tile": 30}, "building_not_owned"],
+	]
+	for item in invalid:
+		eq(m.preview(CIRCULAR, "move", item[0]), item[1], "move rejected: " + item[1])
+	eq(m.preview(CIRCULAR, "move", {"building_id": id, "tile": 35}), "", "a free plot accepts the move")
+	eq(act(m, CIRCULAR, "move", {"building_id": id, "tile": 35}), "applied", "move to plot 35")
+	var after: Dictionary = city(m, CIRCULAR)
+	var moved: Dictionary = building(m, CIRCULAR, id)
+	eq([moved.tile, moved.type, moved.size, moved.status], [35, "collection_center", "S", "complete"], "same building, new plot")
+	eq(after.buildings.size(), count, "no building duplicated or lost")
+	eq(after.buildings.filter(func(x): return x.tile == 35).size(), 1, "one building per plot")
+	check(after.projects.any(func(p): return p != null and p.building_id == id), "its upgrade carries on")
+	check(after.money_micro >= cash - 10 * U, "moving costs nothing beyond the tick's upkeep")
+	eq(moved.op.fraction_micro, A.S, "it keeps operating")
+	check(advance(m, 40), "the match runs on with valid state")
+	eq(building(m, CIRCULAR, id).size, "M", "the upgrade completes on the new plot")

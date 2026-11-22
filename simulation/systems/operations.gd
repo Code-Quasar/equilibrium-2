@@ -23,13 +23,15 @@ func municipal(state: Dictionary, _ctx: Dictionary) -> String:
 		city.finance.unpaid_municipal_upkeep += due - paid
 	return ""
 
-## Phase: enabled buildings pay full upkeep in staffing priority order, plot order within
-## a type. A fossil plant's emission levy is part of its operating cost. Disabled
-## buildings, and enabled ones that cannot pay in full, pay standby upkeep if they can.
+## Phase: enabled buildings pay full upkeep, homes first, then in staffing priority
+## order, plot order within a type. A fossil plant's emission levy is part of its
+## operating cost. Disabled buildings, and enabled ones that cannot pay in full, pay
+## standby upkeep if they can.
 func fund(state: Dictionary, _ctx: Dictionary) -> String:
 	var emission: int = state.crisis.effects.emission
+	var order: Array = ["residential_district"] + b.staffing_order
 	for city in state.cities:
-		for building in Buildings.ordered(city, b.staffing_order):
+		for building in Buildings.ordered(city, order):
 			building.op = Buildings.idle()
 			if building.status != "complete":
 				continue

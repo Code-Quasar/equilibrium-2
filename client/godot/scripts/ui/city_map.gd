@@ -12,6 +12,7 @@ extends Node3D
 ## to select it. On desktop the wheel zooms and right-drag pans.
 
 signal tapped(tile: int)                 # -1: open ground
+signal long_pressed(tile: int)           # a building held down: pick it up to move it
 signal ghost_dragged(cell: Vector2i)
 signal ghost_dropped(cell: Vector2i)
 signal roads_changed
@@ -43,6 +44,9 @@ var _touches := {}
 var _drag := 0.0
 var _pinch := 0.0
 var _ghost_drag := false
+var _press_ms := -1                      # when the single finger went down
+var _press_at := Vector2.ZERO
+const HOLD_MS := 550
 var _painting := false
 var _last_paint := Vector2i(-999, -999)
 var _key := ""
@@ -521,25 +525,32 @@ func _add_building(b: Dictionary) -> void:
 		var ghost := _compose(str(b["type"]), target, at)
 		_override_all(ghost, _blueprint)
 		_marks.add_child(ghost)
+		var upgrading: bool = p != null and str(p.get("kind", "")) == "upgrade"
 		if b.get("visitor", false):
 			# A rival's progress is not public: just the outline and a low frame.
 			node.scale = Vector3(1, 0.15, 1)
 		else:
+			# A building being upgraded keeps working at its size: it stays whole
+			# and only the bar shows how far the upgrade has come.
 			var bar := _progress_bar(node.position + Vector3(0, 2.7, 0))
-			_grow.append([node, start, done, bar[0], bar[1]])
-		_building_ids[id] = true
-		for c in [Vector3(-0.95, 0, 0.95), Vector3(0.95, 0, -0.95)]:
-			var cone := Models.spawn(Models.CONE)
-			cone.position = node.position + c
-			_marks.add_child(cone)
+			_grow.append([null if upgrading else node, start, done, bar[0], bar[1]])
+		if not upgrading:
+			_building_ids[id] = true
+			for c in [Vector3(-0.95, 0, 0.95), Vector3(0.95, 0, -0.95)]:
+				var cone := Models.spawn(Models.CONE)
+				cone.position = node.position + c
+				_marks.add_child(cone)
 	elif _building_ids.has(id):
 		# Just finished: a short pop and a ring of light.
 		_building_ids.erase(id)
 		_celebrate(node)
 	var need: String = needs.get(t, "" if (read_only or layout.linked(t)) else "road")
-	if need != "" and p == null:
+	if need != "" and b.get("status", "") == "complete":
 		_overlay_all(node, _dim)
-		_bubble(node.position + Vector3(0, 2.2, 0), need)
+		_bubble(node.position + Vector3(0, 2.2 if p == null else 3.4, 0), need)
+	if int(placing.get("from", -1)) == t:
+		# Being moved: the building waits, faded, where it stands.
+		_overlay_all(node, _dim)
 
 
 static func _override_all(node: Node, mat: Material) -> void:
@@ -668,6 +679,15 @@ func _notification(what: int) -> void:
 func _process(delta: float) -> void:
 	if visible and camera and not camera.current:
 		camera.make_current()
+	if _press_ms >= 0 and _touches.size() == 1 and _drag < 14.0 and not _painting and not _ghost_drag \
+			and Time.get_ticks_msec() - _press_ms > HOLD_MS:
+		_press_ms = -1
+		var t := layout.tile_at(screen_to_cell(_press_at)) if layout else -1
+		if t >= 0 and not read_only and road_mode == "" and not building_on(t).is_empty():
+			# Held on a building: it is picked up and follows the finger.
+			_drag = 99.0
+			_ghost_drag = true
+			long_pressed.emit(t)
 	if demo and visible:
 		camera.rotation_degrees.y = fmod(camera.rotation_degrees.y + delta * 2.2, 360.0)
 		_place_camera()
@@ -675,7 +695,8 @@ func _process(delta: float) -> void:
 		var now: float = clock.call()
 		for g in _grow:
 			var f := clampf((now - float(g[1])) / maxf(float(g[2]) - float(g[1]), 1.0), 0.0, 1.0)
-			(g[0] as Node3D).scale = Vector3(1, maxf(f, 0.04), 1)
+			if g[0] != null and is_instance_valid(g[0]):
+				(g[0] as Node3D).scale = Vector3(1, maxf(f, 0.04), 1)
 			var fill := g[3] as Sprite3D
 			if is_instance_valid(fill):
 				# Eases toward the new tick's share instead of jumping.
@@ -804,6 +825,8 @@ func _press(index: int, pos: Vector2) -> void:
 	if ui_blocks.call(pos):
 		return
 	_touches[index] = pos
+	_press_ms = Time.get_ticks_msec() if _touches.size() == 1 else -1
+	_press_at = pos
 	if _touches.size() == 1:
 		_drag = 0.0
 		_ghost_drag = _on_ghost(screen_to_cell(pos))
@@ -828,6 +851,7 @@ func _release(index: int, pos: Vector2) -> void:
 	_ghost_drag = false
 	_painting = false
 	_touches.erase(index)
+	_press_ms = -1
 	_pinch = 0.0
 	get_viewport().set_input_as_handled()
 

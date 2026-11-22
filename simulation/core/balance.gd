@@ -74,7 +74,7 @@ static func normalize(raw: Dictionary) -> Dictionary:
 	return {"error": r.error, "config": c if r.error.is_empty() else {}}
 
 static func _consistency(c: Dictionary) -> String:
-	if c.players != 4 or c.duration != 1200 or c.residents != 4000 or c.initial_residents != 1000 or c.tiles != 36 or c.construction.slots != 2:
+	if c.players != 4 or c.duration != 1200 or c.residents != 8000 or c.initial_residents != 2000 or c.tiles != 36 or c.construction.slots != 2:
 		return "unsupported_structural_constants"
 	var s: Dictionary = c.satisfaction
 	if s.environment + s.employment + s.housing + s.power + s.services != 100:
@@ -140,16 +140,22 @@ static func _consistency(c: Dictionary) -> String:
 				return "staffed_type_missing_from_staffing_order"
 			if c.buildings[kind][size].demand > 0 and kind not in c.power_order:
 				return "powered_type_missing_from_power_order"
+	# Every city starts with the baseline buildings, then its Foundation's; the
+	# starting homes must house the starting residents.
 	for id in FOUNDATIONS:
 		var owned: Array = []
-		var package: Dictionary = c.foundations[id]
-		if package.buildings.size() > c.tiles:
+		var housing: int = 0
+		var starts: Array = c.city.buildings + c.foundations[id].buildings
+		if starts.size() > c.tiles:
 			return "foundation_exceeds_grid"
-		for start in package.buildings:
+		for start in starts:
 			for required in c.buildings[start.type].requires:
 				if required not in owned:
 					return "foundation_violates_prerequisites"
 			owned.append(start.type)
+			housing += c.buildings[start.type][start.size].housing
+		if housing < c.initial_residents:
+			return "starting_housing_below_residents"
 	return ""
 
 ## Field reader that records the first error and never throws.
@@ -231,7 +237,7 @@ class Reader:
 			"initial_residents": number(game, "initial_residents_per_city", COUNT),
 			"tiles": number(world, "building_grid_width", COUNT) * number(world, "building_grid_height", COUNT),
 			"city": {
-				"housing": number(city, "starting_housing_capacity", COUNT),
+				"buildings": starting(city.get("starting_buildings"), "baseline_city"),
 				"services": number(city, "starting_service_capacity", COUNT),
 				"municipal_jobs": number(city, "starting_municipal_job_slots", COUNT),
 				"materials": number(city, "starting_materials", MICRO),
@@ -373,15 +379,20 @@ class Reader:
 		for id in FOUNDATIONS:
 			var item: Dictionary = section(raw, id)
 			exact_keys(item, ["starting_buildings", "starting_cash_credits", "starting_materials_units"], id)
-			var package: Dictionary = {"buildings": [], "credits": number(item, "starting_cash_credits", MICRO),
+			result[id] = {"buildings": starting(item.get("starting_buildings"), id),
+				"credits": number(item, "starting_cash_credits", MICRO),
 				"materials": number(item, "starting_materials_units", MICRO)}
-			if not item.get("starting_buildings") is Array:
-				fail("invalid_starting_buildings")
-				continue
-			for start in item.starting_buildings:
-				if not start is Dictionary or start.size() != 2 or start.get("id") not in TYPES or start.get("tier") not in SIZES:
-					fail("invalid_starting_building")
-					break
-				package.buildings.append({"type": start.id, "size": start.tier})
-			result[id] = package
+		return result
+
+	## A list of completed starting buildings: [{"id": type, "tier": size}].
+	func starting(raw: Variant, label: String) -> Array:
+		var result: Array = []
+		if not raw is Array:
+			fail("invalid_starting_buildings_" + label)
+			return result
+		for start in raw:
+			if not start is Dictionary or start.size() != 2 or start.get("id") not in TYPES or start.get("tier") not in SIZES:
+				fail("invalid_starting_building_" + label)
+				return result
+			result.append({"type": start.id, "size": start.tier})
 		return result

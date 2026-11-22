@@ -12,6 +12,7 @@ const WARN := Color("#f2c14a")
 const BAD := Color("#ff7a66")
 
 var value_label: Label
+var alarm_text := true            # false: a bad state shows only in the strip
 var caption: Label
 var _strip: ColorRect
 var _style: StyleBoxFlat
@@ -77,7 +78,7 @@ func set_value(text: String, state := "") -> void:
 	value_label.text = text
 	var col: Color = {"ok": OK, "warn": WARN, "bad": BAD}.get(state, Color(0, 0, 0, 0))
 	_strip.color = col
-	value_label.add_theme_color_override("font_color", BAD if state == "bad" else Color.WHITE)
+	value_label.add_theme_color_override("font_color", BAD if state == "bad" and alarm_text else Color.WHITE)
 
 
 func pulse() -> void:

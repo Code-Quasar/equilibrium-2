@@ -36,11 +36,14 @@ touch → screen (scripts/app.gd, scripts/ui/*) → Session.act / intent methods
 - **Link**: the socket, the handshake, `correlation_id`s and round-trip/jitter measurement (shown as `LIVE nn ms`). It also turns Godot's float JSON numbers back into integers.
 - **Session**: the client's only state, built from server messages: seat, lobby, draft, latest `player_view`, and every action's status (`sending → queued → applied/rejected`). An action is never shown as done before its execution receipt. Rejoin credentials are written to `user://session.cfg` the moment `seat_assigned` arrives. They are never displayed or logged. If the connection drops during the draft or play, the view is marked STALE, actions pause, and Session rejoins every 3 s with the saved credential. Resuming the app on Android also triggers a rejoin.
 - **Presentation** (`scripts/presentation/catalogue.gd`): names, plain-language roles, error wording and number formatting. Protocol v1 has no catalogue message, so prices, build times, capacities, prerequisites, Foundation packages, the crisis schedule and contract prices come from `data/catalogue.json`. `tools/export_catalogue.py` exports that file from `config/balance/B2_1.json` and records its SHA-256, and the test fails if they drift. The client only displays these numbers. Whether a building can start comes from the server: each `player_view` carries the seat's `build_options`, and the build bar shows their reasons ("Needs Collection", "Too costly", …). The server decides every action.
-- **Screens**: the menu, lobby, draft and results live in `app.gd`. The city screen is `ui/play.gd`, kept to plain numbers with no reports:
-  - **Top left:** Satisfaction %, residents and rank, then six need counters: Homes, Jobs, Power and Services as have/need, Street waste, and Environment %. A counter turns red when short; tap it to see what to build.
+- **Screens**: the menu, lobby, draft and results live in `app.gd`. The menu takes the server address as four numeric IP boxes and a port box (`ui/address_field.gd`): the dots are drawn, full numbers move on, a pasted address fills every box, and nothing is sent until it is valid. The draft shows all four Foundations side by side with their strengths and trade-off, and every seat's pick in its own chip; human players choose before the bots. The city screen is `ui/play.gd`, kept to plain numbers with no reports:
+  - **Top left:** Satisfaction %, residents and rank, then Homes, Jobs and Power as have/need, and Environment %. A coloured strip under each figure shows how it stands. Tapping any figure opens a short translucent note on what it means, its value now and its trend; a tap anywhere else closes it. Holding it shows the details (Services and street waste are under Satisfaction and in the Waste panel).
   - **Top right:** cash, recovered materials and time left.
   - **On the map:** a bubble over each building shows what it lacks: a road, power, workers, money, waste collection, or that it is switched off.
-  - **Bottom:** a build bar with a Small / Medium / Large choice (drag a building up onto the map), Roads, Trade, Rivals, and Waste. Tapping a building opens a card with what its size does, how it is running (workers, power, operating share), and Upgrade, Switch off, Demolish or Cancel.
+  - **Bottom:** a build bar with a Small / Medium / Large choice; each card shows its main effect, its price and any materials that will be bought (drag a building up onto the map). Roads, Trade, Rivals and Waste sit beside it.
+  - **A building:** tapping one opens its card: role and state, what it gives (green) and takes (red) as figures, its Small › Medium › Large track with what the next size gives and costs and the Upgrade button, then Switch off, Move and Demolish. More shows the full description. A building being upgraded keeps working at its size; the map shows the next size's outline and progress over it.
+  - **Moving:** hold a building on the map (or tap Move) to pick it up, drag it to open land, then Move here. The server's `move` command checks the new site; the map shows the building there only once the server has moved it.
+  - **Crises:** when one strikes, the screen edges glow red three times (once, gently, with Settings → Reduce motion).
   - **Waste:** the recovery chain (Collection → Sorting → Recycling / Biogas, Landfill) with what is built and what each stage still needs, the waste waiting at every stage, materials recovered by stage, and selling materials.
   - **Trade:** publish spare electricity, recycling or organic treatment at the fixed price; accept a rival's offer for 1 to 5 minutes with the escrow it holds shown first; follow and cancel your contracts.
 - **Open map and roads** (`presentation/city_layout.gd`, `ui/city_map.gd`, `ui/traffic.gd`): the city is an isometric landscape with a winding river, floodplain and woods. One **main road** crosses it, bridging the river, and it cannot be removed.
@@ -55,6 +58,8 @@ touch → screen (scripts/app.gd, scripts/ui/*) → Session.act / intent methods
 
 ## Art and sound
 
+The interface is set in **Pixelify Sans** (`assets/fonts/`, SIL Open Font License 1.1, licence in `assets/fonts/OFL.txt`); figures use a bold system sans so every digit reads at phone sizes.
+
 The game uses Kenney asset packs (www.kenney.nl, CC0 public domain), copied into `assets/kenney/` with their licence files:
 
 | Pack | Used for |
@@ -64,7 +69,7 @@ The game uses Kenney asset packs (www.kenney.nl, CC0 public domain), copied into
 | Car Kit | Traffic, garbage trucks, bulldozer at the landfill |
 | Factory Kit | Conveyors, hoppers and crates (sorting, recycling, landfill) |
 | Nature Kit | Forests and parks |
-| UI Pack | Buttons, panels, round buttons, Kenney Future fonts |
+| UI Pack | Buttons, panels, round buttons |
 | Interface Sounds | Button clicks |
 
 - **3D map** (`ui/city_map.gd`): the map is a 3D scene seen through an orthographic isometric camera. `presentation/models.gd` lists which models make up each building at each size (Small, Medium, Large), and road pieces are chosen and turned from their neighbours (`tests/roads_view.gd` renders every road shape from above to check this).
