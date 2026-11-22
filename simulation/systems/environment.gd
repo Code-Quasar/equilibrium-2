@@ -1,8 +1,10 @@
 extends RefCounted
 ## Environment = clamp(100 - air - landfill damage - untreated pressure + min(cap, park amenity), 0, 100).
 ## Air and landfill damage are persistent stocks; pressure is recomputed from the waste
-## physically present this second. Parks clean air only and cannot offset landfill
-## damage or street waste.
+## physically present this second. Park cleanup clears air first; what the air no
+## longer needs repairs landfill damage, so a city whose parks outweigh its
+## emissions and landfilling recovers toward 100. Natural recovery clears air only,
+## and nothing offsets street waste.
 const A = preload("res://simulation/core/arithmetic.gd")
 const Buildings = preload("res://simulation/systems/buildings.gd")
 var b: Dictionary
@@ -17,17 +19,20 @@ func update(state: Dictionary, _ctx: Dictionary) -> String:
 	var e: Dictionary = b.environment
 	for city in state.cities:
 		var emitted: int = 0
-		var cleanup: int = A.per_tick(city.carries, "air_decay", A.mul(e.air_decay, state.crisis.effects.air_decay))
+		var natural: int = A.per_tick(city.carries, "air_decay", A.mul(e.air_decay, state.crisis.effects.air_decay))
+		var parks: int = 0
 		var amenity: int = 0
 		for building in city.buildings:
 			emitted += building.op.emitted_micro
 			if building.type == "park" and building.op.funded:
 				var t: Dictionary = catalogue.tier(building)
-				cleanup += A.per_tick(building.carries, "cleanup", t.cleanup, building.op.fraction_micro)
+				parks += A.per_tick(building.carries, "cleanup", t.cleanup, building.op.fraction_micro)
 				amenity += A.mul(t.amenity, building.op.fraction_micro)
-		city.air_micro = clampi(city.air_micro + emitted - cleanup, 0, e.air_cap)
+		var air: int = maxi(city.air_micro + emitted - natural, 0) - parks
+		var repair: int = maxi(-air, 0)
+		city.air_micro = clampi(air, 0, e.air_cap)
 		var damage: int = A.carried(city.carries, "landfill_damage", city.waste.tick.landfilled, e.landfill_damage, A.S)
-		city.landfill_damage_micro = mini(city.landfill_damage_micro + damage, e.landfill_cap)
+		city.landfill_damage_micro = clampi(city.landfill_damage_micro + damage - repair, 0, e.landfill_cap)
 		var stored: int = A.total(city.sorted_micro) + city.disposal_micro
 		city.pressure_micro = mini(e.pressure_cap, A.mul(A.total(city.street_micro), e.pressure_street)
 			+ A.mul(A.total(city.mixed_micro), e.pressure_mixed) + A.mul(stored, e.pressure_stored))

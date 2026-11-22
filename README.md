@@ -14,6 +14,7 @@ Satisfaction combines Environment, employment, housing, power reliability and pu
 - A physical waste ledger, one material inventory, priced inputs, landfill fees and an emissions levy.
 - Staffing, prioritized electricity, biogas power, Environment stocks and pairwise Satisfaction-driven migration.
 - Four Foundations, four announced regional crises and fixed-price electricity and treatment contracts with escrow.
+- ECO EMERGENCIES: three server-validated recycling minigames per match (routing, slicing, repair); the winner's boost raises one stage of their own recovery chain for 90 seconds.
 - An authoritative WebSocket server with lobby, draft, reconnection, bots and per-seat views.
 
 ## Requirements

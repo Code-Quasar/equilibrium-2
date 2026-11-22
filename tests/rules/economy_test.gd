@@ -13,6 +13,7 @@ func _initialize() -> void:
 	parks_need_no_workers()
 	electricity()
 	environment()
+	parks_restore_environment()
 	crises()
 	materials()
 	municipal_shortfall()
@@ -132,7 +133,7 @@ func environment() -> void:
 	c = city(green, INVESTMENT)
 	eq(c.air_micro, 3 * U - 120000 - 240000, "a Small park cleans 0.24 per minute")
 	eq(c.amenity_micro, 1 * U, "a Small park adds 1 amenity point")
-	check(c.landfill_damage_micro > 1 * U, "landfill damage keeps accumulating with a park")
+	check(c.landfill_damage_micro > 1 * U, "while the air still needs it, a park does not touch landfill damage")
 	eq(c.environment_micro, 100 * U - c.air_micro - c.landfill_damage_micro - c.pressure_micro + c.amenity_micro, "Environment = 100 - air - landfill - pressure + amenity")
 	var street = fixture()
 	c = city(street, INVESTMENT)
@@ -140,6 +141,38 @@ func environment() -> void:
 	advance(street, 1)
 	c = city(street, INVESTMENT)
 	eq(c.pressure_micro, A.mul(A.total(c.street_micro), 160000) + A.mul(c.disposal_micro + A.total(c.sorted_micro), 25000), "street waste weighs 0.16, stored waste 0.025")
+
+## Once the air is clean, park cleanup repairs landfill damage: a city whose
+## parks outweigh its emissions and landfilling climbs back to Environment 100,
+## while one whose emissions win keeps falling.
+func parks_restore_environment() -> void:
+	var m = fixture()
+	var c: Dictionary = city(m, INVESTMENT)
+	set_cash(c, 20000 * U)
+	for i in range(8):
+		place(m, c, "park", "L")
+	var damage: int = c.landfill_damage_micro
+	advance(m, 30)
+	c = city(m, INVESTMENT)
+	check(c.air_micro < 3 * U and c.landfill_damage_micro > damage, "the parks clean the air first, while landfilling still adds damage")
+	advance(m, 30)
+	c = city(m, INVESTMENT)
+	eq([c.air_micro, c.landfill_damage_micro], [0, 0], "with clean air to spare, the parks repair the landfill damage")
+	eq(c.environment_micro, 100 * U, "and Environment reaches 100")
+	advance(m, 540)
+	c = city(m, INVESTMENT)
+	check(c.waste.totals.landfilled > 0 and c.landfill_damage_micro == 0 and c.environment_micro == 100 * U, "it stays there while the parks outweigh the landfilling")
+	var grey = fixture()
+	c = city(grey, INVESTMENT)
+	set_cash(c, 20000 * U)
+	for i in range(3):
+		place(grey, c, "fossil_power_plant", "L")
+	place(grey, c, "park")
+	var before: int = c.environment_micro
+	advance(grey, 120)
+	check(city(grey, INVESTMENT).environment_micro < before, "with emissions outweighing the parks, Environment keeps falling")
+	check(city(grey, INVESTMENT).landfill_damage_micro > 1 * U, "and the parks' cleanup all goes to the air")
+
 
 func crises() -> void:
 	var m = fixture()

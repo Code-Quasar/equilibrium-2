@@ -56,6 +56,21 @@ touch → screen (scripts/app.gd, scripts/ui/*) → Session.act / intent methods
   - **Traffic:** cars follow the real population and working workplaces, queue behind each other and wait at junctions, so busy roads jam. Traffic itself changes nothing in the game.
   - **Tests:** `tests/road_rule.gd` checks the map rules and, against a real server, that an unconnected building is switched off by the engine and switched back on once a road reaches it.
 
+## ECO EMERGENCIES
+
+`scripts/ui/emergency/` holds the three minigames and the layer that runs them over the city.
+
+- **The alert** reads as an infrastructure alert from the city's own Collection, Sorting or Recycling Center, or as a regional recycling challenge when the city has none. It shows the countdown, the winner's reward and which cities are responding. Respond opens the game; Continue city (or Esc) closes it for good. While an event runs, a pill at the top brings a player back, or lets a player who declined join late.
+- **The games** are drawn in code (`waste_art.gd`, no external art). The header shows the time, score, streak, the four cities' live scores and a shared meter.
+  - **Fast Waste Routing:** a collection hall with a moving belt, rollers and three open bins. Drag an item (it lifts, grows a little and casts a shadow; the bin under it lights up) or tap it and then a bin. Right items fly into the bin with a bounce and sparks; wrong ones shake the bin red. Items in the amber exit zone are about to fall off.
+  - **Precision Slice:** an arcade sorting line with a slice/avoid legend. Each material breaks its own way — plastic halves and flecks, metal shards with a glint, torn paper, glass that shatters with a sparkle — and cutting two or three in one swipe pops DOUBLE!/TRIPLE!. Hazards get a red cross and a shake, never a celebration.
+  - **Keep the Line Alive:** a connected shredder → filter → press line with material flowing through its pipes, a large line-efficiency meter and the current bottleneck. Pull a jammed shredder back along its release track; pick the valve whose ghost mark lands the pressure in the green; tap the press when the marker is in the green band. The line shown is the server's last state plus the player's unconfirmed actions, replayed with the server's own model (`plant_model.gd`, kept identical to the server's by `tools/check_repository.py`).
+- **Feedback:** distinct sounds per game and material (Kenney Interface Sounds, CC0), each effect at most every 70 ms and six at once, so bursts never become noise; optional short vibrations on phones (Settings → Vibration).
+- **Authority:** the trail, the drag and the hit effects appear at once, and the player's own score is predicted with the server's rules. Every action goes to the server, which scores it; other cities' scores and the result come only from the server's views, once per second.
+- **The boost** appears under the top-right figures with its time left; the boosted buildings glow on the map. A city without that stage's building is told to build one to use it.
+- **Diagnostics:** with Settings → Network diagnostics on, the game shows the measured round-trip time and jitter, how often views arrive, their age, and how long the server takes to confirm a score. Nothing is simulated and nothing claims a 5G link.
+- **Sounds** come from Kenney's Interface Sounds (CC0); a missing sound plays nothing.
+
 ## Art and sound
 
 The interface is set in **Pixelify Sans** (`assets/fonts/`, SIL Open Font License 1.1, licence in `assets/fonts/OFL.txt`); figures use a bold system sans so every digit reads at phone sizes.
@@ -92,6 +107,14 @@ godot --path client/godot --script res://tests/capture.gd -- ws://127.0.0.1:9080
 - A construction with its admission and execution receipts, and an occupied-tile rejection with its reason.
 - A market offer, the server's build options in the view, seat isolation, and a dropped connection followed by an automatic rejoin of the same seat.
 
+`collection_rounds.gd` plays three Collection Crisis rounds in a row without restarting (`--dev-emergencies collection_crisis@15,collection_crisis@60,collection_crisis@105`), routing every item with real mouse drags and the tap fallback. In each round it checks that every item on the belt was drawn, that the alert never covered the game, that every routing scored exactly once and played its sounds, and that no minigame remains afterwards.
+
+`emergencies.gd` plays all three ECO EMERGENCIES against a server in developer mode (`--dev-emergencies collection_crisis@25,sorting_overload@75,recycling_breakdown@125`). It responds to one alert, declines one and joins it late, and plays each game with real mouse drags. It checks the server's scores, the result, the boost badge and that no minigame stays behind, with a screenshot at each step:
+
+```sh
+godot --path client/godot --script res://tests/emergencies.gd -- ws://127.0.0.1:9080 /tmp/shots 1170x540
+```
+
 `capture.gd` saves the menu, lobby, draft, city, build list, placement, roads, building panel, Waste, Trade, Rivals, detail popovers, a rival visit and results screens. Two screens use labelled test fixtures: Trade with a rival's offer and an active contract, and the results, because a real final result takes 20 minutes. `road_rule.gd` (above) and `menu_shots.gd` (menus, How to Play, address validation) need no fixture.
 
 ## Limitations
@@ -101,3 +124,5 @@ godot --path client/godot --script res://tests/capture.gd -- ws://127.0.0.1:9080
 - **No catalogue message:** protocol v1 has none, so prices come from the exported B2.1 display copy. Which buildings can start comes from the view's `build_options`, one tick old; the server's receipt is the final word.
 - **Not exercised end to end:** a full 20-minute match, a completed trade between two humans, and network play over LAN or 5G.
 - **Join codes:** four digits, easy to read out and type. The code field accepts digits only.
+- **Emergency update rate:** other cities' scores and the shared meter update with each server view, once per second (the simulation's tick). The player's own score and every effect respond at once.
+- **Network impairment:** there is no built-in latency simulator. To test under latency, use an external tool on the server machine (for example `clumsy` on Windows, or `tc qdisc add dev eth0 root netem delay 80ms 20ms` on Linux) and read the measured values in the diagnostics.

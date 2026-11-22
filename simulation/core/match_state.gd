@@ -8,9 +8,11 @@ const Finance = preload("res://simulation/systems/finance.gd")
 const Materials = preload("res://simulation/systems/materials.gd")
 const Waste = preload("res://simulation/systems/waste.gd")
 const Market = preload("res://simulation/systems/market.gd")
+const Emergencies = preload("res://simulation/systems/emergencies.gd")
 
-## Foundations are one unique card per seat, in seat order.
-static func create(match_id: String, seed_value: int, foundations: Array, b: Dictionary) -> Dictionary:
+## Foundations are one unique card per seat, in seat order. emergency_schedule fixes
+## the ECO EMERGENCIES ([{type, start}]) for tests and the server's developer mode.
+static func create(match_id: String, seed_value: int, foundations: Array, b: Dictionary, emergency_schedule: Array = []) -> Dictionary:
 	if match_id.is_empty() or foundations.size() != b.players:
 		return {}
 	for foundation in foundations:
@@ -42,7 +44,8 @@ static func create(match_id: String, seed_value: int, foundations: Array, b: Dic
 		cities.append(city)
 	var state: Dictionary = {"match_id": match_id, "seed": seed_value, "tick": 0, "status": "running",
 		"foundations": foundations.duplicate(), "cities": cities, "crisis": {}, "migrations": [],
-		"final_result": null, "last_command_seq": [-1, -1, -1, -1], "command_results": {}}
+		"final_result": null, "last_command_seq": [-1, -1, -1, -1], "command_results": {},
+		"emergencies": Emergencies.create_state(seed_value, b.emergencies, emergency_schedule)}
 	Market.initialize(state)
 	return state
 
@@ -75,4 +78,4 @@ static func validate(state: Dictionary, b: Dictionary) -> String:
 			return error
 	if residents != b.residents:
 		return "population_conservation"
-	return ""
+	return Emergencies.validate_state(state, b.emergencies)

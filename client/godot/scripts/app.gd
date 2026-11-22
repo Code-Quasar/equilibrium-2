@@ -473,6 +473,8 @@ func _open_settings() -> void:
 	body.add_child(UI.label("Display", "Chapter"))
 	body.add_child(_toggle("Reduce motion", Settings.reduce_motion, func(on): Settings.reduce_motion = on; Settings.save()))
 	body.add_child(UI.label("Crises then glow once at the screen edges instead of pulsing.", "OnDarkCaption", true))
+	body.add_child(_toggle("Vibration", Settings.vibration, func(on): Settings.vibration = on; Settings.save()))
+	body.add_child(UI.label("Short taps on phones when an emergency action lands. Never needed to play.", "OnDarkCaption", true))
 	body.add_child(UI.label("Connection", "Chapter"))
 	body.add_child(_toggle("Secure connection (wss://)", Settings.secure, func(on): Settings.secure = on; Settings.save()))
 	body.add_child(UI.label("Use it when the server sits behind TLS. Most local servers use the plain connection.", "OnDarkCaption", true))
@@ -525,7 +527,7 @@ const HOWTO := [
 	["05", "Electricity", ["renewable_power_plant", "fossil_power_plant"], ["power"],
 		"Power plants generate electricity and most buildings use it. Fossil plants are quick and cheap but dirty the air; renewable plants are clean. A shortage lowers Satisfaction, and spare power can be sold."],
 	["06", "Waste", ["collection_center", "sorting_center", "recycling_center", "biogas_facility"], ["waste", "materials"],
-		"Homes and businesses produce recyclable, organic and residual waste, and the city fleet hauls what it can to the landfill. Build the recovery chain in order: a Collection Center collects more and salvages some recyclables; a Sorting Center separates the rest and reuses more; a Recycling Center then makes the most materials and a Biogas Facility turns organics into power. Each step recovers more from the same waste. Materials pay for construction and feed factories; landfill damage never fades."],
+		"Homes and businesses produce recyclable, organic and residual waste, and the city fleet hauls what it can to the landfill. Build the recovery chain in order: a Collection Center collects more and salvages some recyclables; a Sorting Center separates the rest and reuses more; a Recycling Center then makes the most materials and a Biogas Facility turns organics into power. Each step recovers more from the same waste. Materials pay for construction and feed factories; landfill damage lasts until parks with clean air to spare repair it."],
 	["07", "Trade", ["commercial_district"], ["offers"],
 		"In Trade, offer spare electricity, recycling or organic treatment to the other cities at fixed prices, or accept their offers for one to five minutes. The buyer's escrow holds the most a contract could cost; only real deliveries are paid and the rest comes back."],
 	["08", "Crises", ["fossil_power_plant"], ["event", "pollution"],

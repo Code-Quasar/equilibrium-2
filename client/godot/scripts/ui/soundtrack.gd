@@ -14,11 +14,50 @@ const ALERTS := {
 	"notice": "res://assets/kenney/sounds/glass_002.ogg",
 	"built": "res://assets/kenney/sounds/maximize_006.ogg",
 }
+## Short effects for the ECO EMERGENCIES, several at once from a small pool.
+const SFX := {
+	"alert": "res://assets/kenney/sounds/question_004.ogg",
+	"countdown": "res://assets/kenney/sounds/tick_002.ogg",
+	"go": "res://assets/kenney/sounds/maximize_003.ogg",
+	"final": "res://assets/kenney/sounds/tick_004.ogg",
+	"right": "res://assets/kenney/sounds/confirmation_001.ogg",
+	"wrong": "res://assets/kenney/sounds/error_006.ogg",
+	"combo": "res://assets/kenney/sounds/maximize_008.ogg",
+	"bin": "res://assets/kenney/sounds/drop_002.ogg",
+	"swipe": "res://assets/kenney/sounds/scratch_002.ogg",
+	"slice": "res://assets/kenney/sounds/glass_004.ogg",
+	"hazard": "res://assets/kenney/sounds/glitch_002.ogg",
+	"fault": "res://assets/kenney/sounds/switch_004.ogg",
+	"repair": "res://assets/kenney/sounds/confirmation_003.ogg",
+	"stable": "res://assets/kenney/sounds/maximize_005.ogg",
+	"victory": "res://assets/kenney/sounds/maximize_009.ogg",
+	"defeat": "res://assets/kenney/sounds/close_003.ogg",
+	"boost": "res://assets/kenney/sounds/maximize_006.ogg",
+	"pickup": "res://assets/kenney/sounds/select_002.ogg",
+	"exit_warn": "res://assets/kenney/sounds/tick_001.ogg",
+	"slice_plastic": "res://assets/kenney/sounds/pluck_002.ogg",
+	"slice_metal": "res://assets/kenney/sounds/switch_006.ogg",
+	"slice_paper": "res://assets/kenney/sounds/scratch_004.ogg",
+	"slice_glass": "res://assets/kenney/sounds/glass_004.ogg",
+	"multi": "res://assets/kenney/sounds/maximize_002.ogg",
+	"jam": "res://assets/kenney/sounds/glitch_003.ogg",
+	"pressure": "res://assets/kenney/sounds/question_003.ogg",
+	"misalign": "res://assets/kenney/sounds/switch_007.ogg",
+	"recover": "res://assets/kenney/sounds/maximize_005.ogg",
+	"critical": "res://assets/kenney/sounds/error_004.ogg",
+	"partial": "res://assets/kenney/sounds/click_003.ogg",
+}
+## The shortest gap between two plays of one effect: a burst of hits is one sound.
+const SFX_GAP_MS := 70
 
 var state := ""
 var _players: Array[AudioStreamPlayer] = []
 var _active := 0
 var _alert: AudioStreamPlayer
+var _sfx: Array[AudioStreamPlayer] = []
+var _next_sfx := 0
+var _last_sfx := {}                  # effect -> when it last played
+var played := {}                     # tests only: effect -> times played
 var _streams := {}
 var _warned := {}
 var _active_events := {}
@@ -36,6 +75,12 @@ func _ready() -> void:
 	_alert.bus = "SFX"
 	_alert.volume_db = -4.0
 	add_child(_alert)
+	for i in 6:
+		var s := AudioStreamPlayer.new()
+		s.bus = "SFX"
+		s.volume_db = -6.0
+		add_child(s)
+		_sfx.append(s)
 
 
 func _stream(name: String) -> AudioStream:
@@ -101,6 +146,25 @@ func follow(view: Dictionary) -> void:
 			alert("crisis_over")
 	_warned = warnings
 	_active_events = active
+
+
+## One short effect; up to six play at once and the same one at most every
+## SFX_GAP_MS, so bursts never become a wall of noise. A missing sound plays nothing.
+func sfx(kind: String) -> void:
+	if not SFX.has(kind) or _sfx.is_empty():
+		return
+	var now := Time.get_ticks_msec()
+	if now - int(_last_sfx.get(kind, -100000)) < SFX_GAP_MS:
+		return
+	_last_sfx[kind] = now
+	played[kind] = int(played.get(kind, 0)) + 1
+	var stream: Variant = load(SFX[kind])
+	if stream == null:
+		return
+	var p: AudioStreamPlayer = _sfx[_next_sfx]
+	_next_sfx = (_next_sfx + 1) % _sfx.size()
+	p.stream = stream
+	p.play()
 
 
 func alert(kind: String) -> void:

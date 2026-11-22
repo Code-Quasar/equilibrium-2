@@ -23,7 +23,7 @@ const EXPLAIN := {
 	"homes": ["Homes", "Homes in your Residential Districts against residents. Full comfort needs 15 % spare homes, and newcomers need a free one."],
 	"jobs": ["Jobs", "Residents at work. The city employs the first 1,000; your buildings employ the rest."],
 	"power": ["Power", "Electricity delivered against what the city and its buildings ask for."],
-	"air": ["Environment", "0 to 100: air pollution, landfill damage and waste lying around lower it; parks add amenity."],
+	"air": ["Environment", "0 to 100: air pollution, landfill damage and waste lying around lower it. Parks clean the air, then repair landfill damage, and add amenity."],
 	"money": ["Cash", "Cash you can spend on construction, upkeep and trade. Cash held for contracts is not counted."],
 	"materials": ["Materials", "Stock for construction and factories, up to 500. What is missing is bought for cash."],
 	"time": ["Time left", "The match lasts 20 minutes. Each crisis is announced 45 s before it starts."],
@@ -67,6 +67,8 @@ var _reserved := {}               # tile -> action id of a construction or move 
 var _moves := {}                  # new tile -> the tile a moving building leaves
 var _crises_seen := {}            # crisis ids whose arrival was already marked
 var _edge: EdgePulse
+var emergency: EmergencyLayer        # ECO EMERGENCIES over the city
+var _boost: PanelContainer
 var _details_open := false        # the building panel shows its full description
 var _card_drag := {}              # a build card pressed, before it becomes a drag
 var _card_dragging := false
@@ -233,6 +235,11 @@ func _build() -> void:
 	_net = UI.label("", "HudCaption")
 	_net.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	right.add_child(_net)
+	# An ECO EMERGENCIES boost this city won, while it lasts.
+	_boost = PanelContainer.new()
+	_boost.visible = false
+	_boost.size_flags_horizontal = Control.SIZE_SHRINK_END
+	right.add_child(_boost)
 	_blockers.append(_corner(Control.PRESET_TOP_RIGHT, 12, 8, right))
 	_diag = UI.label("", "HudCaption")
 	_diag.add_theme_font_override("font", UI.number_font())
@@ -356,6 +363,8 @@ func _build() -> void:
 	# A red pulse at the screen edges when a crisis strikes.
 	_edge = EdgePulse.new()
 	add_child(_edge)
+	emergency = EmergencyLayer.new(session)
+	add_child(emergency)
 
 	# Recent actions and their receipts, above the bottom-left buttons.
 	_activity = UI.vbox(4)
@@ -561,6 +570,8 @@ func tick() -> int:
 func refresh(what: String) -> void:
 	if v().is_empty():
 		return
+	if what in ["view", "all"]:
+		emergency.refresh(v())
 	_track_population()
 	_hud_refresh()
 	_settle_reservations()
@@ -607,6 +618,7 @@ func _hud_refresh() -> void:
 	var left := int(v().get("public", {}).get("duration_ticks", 1200)) - t
 	_timer.set_value(Catalogue.clock(left), "bad" if left <= 60 else "")
 	_net.text = "" if session.live else "● reconnecting…"
+	_boost_refresh()
 	_net.add_theme_color_override("font_color", Color("#f28a72"))
 	_diag_refresh()
 	# What the city has against what it needs. Homes and services count in full
@@ -649,6 +661,49 @@ static func _delivered_power(p: Dictionary) -> float:
 
 static func _requested_power(p: Dictionary) -> float:
 	return float(int(p.get("municipal_requested_micro_E", 0)) + int(p.get("buildings_requested_micro_E", 0))) / Catalogue.MICRO
+
+
+const BOOSTS := {"collection": ["COLLECTION SURGE", "collection_center", "Collection Center"],
+	"sorting": ["PRECISION BOOST", "sorting_center", "Sorting Center"],
+	"recycling": ["RECOVERY SURGE", "recycling_center", "Recycling Center"]}
+
+
+## The boost this city won: its name, time left and whether it has a building to
+## act on; its buildings glow on the map while it lasts.
+func _boost_refresh() -> void:
+	var boosts: Array = own().get("boosts", [])
+	var lit := {}
+	_boost.visible = not boosts.is_empty()
+	if boosts.is_empty():
+		if not map.highlight.is_empty():
+			map.highlight = {}
+			map.rebuild()
+		return
+	var x: Dictionary = boosts[0]
+	var meta: Array = BOOSTS.get(str(x.stage), ["BOOST", "", ""])
+	var working := false
+	for b in own().get("buildings", []):
+		if b.get("type", "") == meta[1] and b.get("status", "") == "complete":
+			lit[int(b["tile"])] = true
+			working = working or b.get("op", {}).get("funded", false)
+	var pct := int(round((float(x.multiplier_micro) / 1000000.0 - 1.0) * 100.0))
+	var text := "★ %s +%d%% · %s" % [meta[0], pct, Catalogue.clock(maxi(0, int(x.end) - tick()))]
+	if not working:
+		text = "★ %s ACTIVE — BUILD A %s TO USE IT" % [meta[0], str(meta[2]).to_upper()] if lit.is_empty() else "★ %s ACTIVE — ITS %s IS NOT RUNNING" % [meta[0], str(meta[2]).to_upper()]
+	if not _boost.has_meta("since") or _boost.get_meta("source", "") != str(x.source):
+		_boost.set_meta("source", str(x.source))
+		_boost.set_meta("since", true)
+		_boost.pivot_offset = Vector2(120, 16)
+		_boost.scale = Vector2(1.25, 1.25)
+		_boost.create_tween().tween_property(_boost, "scale", Vector2.ONE, 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_boost.add_theme_stylebox_override("panel", UI.box(Color(0.35, 0.27, 0.05, 0.9), 99, Color("#ffd257"), 1, 0, Color(), 6))
+	UI.clear(_boost)
+	var l := UI.label(text, "HudSmall")
+	l.add_theme_color_override("font_color", Color("#ffe08a"))
+	_boost.add_child(l)
+	if lit != map.highlight:
+		map.highlight = lit
+		map.rebuild()
 
 
 ## Seconds until the next move of residents, or -1 when none is left.
@@ -900,7 +955,7 @@ func _detail_rows(key: String) -> Array:
 		"air":
 			return ["Environment", ["Environment", Catalogue.micro(o.get("environment_micro", 0), 1)], ["Air pollution", "−" + Catalogue.micro(o.get("air_micro", 0), 1)],
 				["Landfill damage", "−" + Catalogue.micro(o.get("landfill_damage_micro", 0), 1)], ["Waste lying around", "−" + Catalogue.micro(o.get("pressure_micro", 0), 1)],
-				["Park amenity", "+" + Catalogue.micro(o.get("amenity_micro", 0), 1)], "Landfill damage never fades; parks clean only the air."]
+				["Park amenity", "+" + Catalogue.micro(o.get("amenity_micro", 0), 1)], "Parks clean the air first; once it is clean they repair landfill damage."]
 		"money":
 			var n: Array = sg.call(_per_minute(1), " / min")
 			var rows4: Array = ["Cash", ["Available", Catalogue.micro(o.get("available_money_micro", 0))], ["Balance", Catalogue.micro(o.get("money_micro", 0))]]

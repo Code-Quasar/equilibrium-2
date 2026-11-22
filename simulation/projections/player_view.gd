@@ -40,8 +40,8 @@ static func scalars(source: Variant) -> Dictionary:
 static func strings(source: Variant) -> Array:
 	return source.filter(func(item): return typeof(item) == TYPE_STRING) if source is Array else []
 
-## options: the engine's build_options for this seat.
-static func project(state: Dictionary, seat: int, options: Dictionary = {}) -> Dictionary:
+## options: the engine's build_options for this seat; emergency: its emergency_view.
+static func project(state: Dictionary, seat: int, options: Dictionary = {}, emergency: Dictionary = {}) -> Dictionary:
 	assert(seat >= 0 and seat < 4)
 	var rankings: Array = picks(Migration.ranking(state), RANKING)
 	var crisis: Dictionary = state.get("crisis", {})
@@ -88,4 +88,9 @@ static func project(state: Dictionary, seat: int, options: Dictionary = {}) -> D
 		final = pick(state.final_result, ["duration", "canonical_sha256"])
 		final.winners = state.final_result.winners.filter(func(id): return typeof(id) == TYPE_INT)
 		final.rankings = rankings.duplicate(true)
+	# The event, its challenge and leaderboard are the same for every seat; own
+	# progress and boosts are this seat's only.
+	public.emergency = emergency.get("event")
+	own.emergency = emergency.get("own")
+	own.boosts = emergency.get("boosts", [])
 	return {"public": public, "own_city": own, "opponents": opponents, "marketplace": market, "final_result": final}

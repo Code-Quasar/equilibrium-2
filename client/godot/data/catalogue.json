@@ -610,5 +610,5 @@
  "ruleset": "B2.1",
  "services_slack": 1.15,
  "source": "config/balance/B2_1.json",
- "source_sha256": "8f2c9e15f613030c64e20820e18f40c166248910a8b1f6aad8ade631168657c9"
+ "source_sha256": "2da5ad891ce6f2e77f92c090bf0c4203b94ded01b2a46c7bfa50c9758c8546a1"
 }

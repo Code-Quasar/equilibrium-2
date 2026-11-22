@@ -30,6 +30,16 @@ Rejoin credentials expire after two hours, rotate on rejoin, and revoke the form
 
 Bots follow `bot_controller.gd`'s fixed plan: one Small construction every 90 ticks, in an order that respects the Collection → Sorting → Recycling/Biogas prerequisites, submitted only if the engine preview permits it. They are minimal opponents, not competitive AI. Bots receive no grants and never control human seats.
 
+## ECO EMERGENCIES developer mode
+
+To try the three emergencies without waiting for their windows, start a server with a fixed schedule (start ticks; the draft takes the first seconds):
+
+```sh
+godot --headless --path . --script server/main.gd -- --port 9080 --dev-emergencies collection_crisis@25,sorting_overload@75,recycling_breakdown@125
+```
+
+It is an operator command-line option only, never a network message, so no player can trigger it. Views then carry `public.developer_mode = true` (clients label it). The server's output logs every emergency phase change with the authoritative scores, result and boosts, for example `EMERGENCY tick=62 em1 collection_crisis results scores=[330, 0, 0, 0] ...`. Bots do not take part in emergencies.
+
 ## Checks
 
 ```sh

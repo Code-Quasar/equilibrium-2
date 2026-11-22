@@ -17,7 +17,11 @@ const PAYLOADS = {
 	"move":{"building_id":TYPE_INT,"tile":TYPE_INT},
 	"sell_materials":{"amount":TYPE_INT},
 	"publish_offer":{"type":TYPE_STRING,"rate":TYPE_INT},
-	"withdraw_offer":{"id":TYPE_INT},"accept_offer":{"id":TYPE_INT},"cancel_contract":{"id":TYPE_INT}
+	"withdraw_offer":{"id":TYPE_INT},"accept_offer":{"id":TYPE_INT},"cancel_contract":{"id":TYPE_INT},
+	"emergency_join":{"event":TYPE_STRING},
+	"emergency_route":{"event":TYPE_STRING,"item":TYPE_INT,"bin":TYPE_INT,"t_ms":TYPE_INT},
+	"emergency_slice":{"event":TYPE_STRING,"item":TYPE_INT,"t_ms":TYPE_INT,"x1":TYPE_INT,"y1":TYPE_INT,"x2":TYPE_INT,"y2":TYPE_INT},
+	"emergency_repair":{"event":TYPE_STRING,"machine":TYPE_INT,"answer":TYPE_INT,"t_ms":TYPE_INT}
 }
 const OPTIONAL = {"construct":{"tile":TYPE_INT},"accept_offer":{"duration":TYPE_INT}}
 static func decode(bytes: PackedByteArray) -> Dictionary:

@@ -90,13 +90,16 @@ func choose_foundation(id: String) -> void:
 
 
 ## Sends a gameplay action. label is the player-facing description.
-func act(kind: String, payload: Dictionary, label: String) -> String:
+## quiet: a minigame action, kept out of the action list and its rejection toasts
+## (the minigame shows its own feedback).
+func act(kind: String, payload: Dictionary, label: String, quiet := false) -> String:
 	if phase != "play" or not live:
-		notice.emit("Reconnecting — actions are paused", "warn")
+		if not quiet:
+			notice.emit("Reconnecting — actions are paused", "warn")
 		return ""
 	var aid := Link.new_id()
 	actions[aid] = {"kind": kind, "payload": payload.duplicate(true), "label": label, "status": "sending",
-		"error": "", "sent_ms": Time.get_ticks_msec(), "done_ms": 0}
+		"error": "", "sent_ms": Time.get_ticks_msec(), "done_ms": 0, "quiet": quiet}
 	var m := {"action_id": aid, "kind": kind, "payload": payload}
 	if view.has("tick"):
 		m["observed_tick"] = int(view["tick"])
@@ -111,7 +114,8 @@ func act(kind: String, payload: Dictionary, label: String) -> String:
 func recent_actions(n := 5) -> Array:
 	var out := []
 	for id in actions:
-		out.append(actions[id].merged({"id": id}))
+		if not actions[id].get("quiet", false):
+			out.append(actions[id].merged({"id": id}))
 	out.sort_custom(func(a, b): return a["sent_ms"] > b["sent_ms"])
 	return out.slice(0, n)
 
@@ -307,7 +311,8 @@ func _ack(m: Dictionary) -> void:
 		a["status"] = "rejected"
 		a["error"] = status
 		a["done_ms"] = Time.get_ticks_msec()
-		notice.emit("%s — %s" % [a["label"], _explain(status, status)], "bad")
+		if not a.get("quiet", false):
+			notice.emit("%s — %s" % [a["label"], _explain(status, status)], "bad")
 	changed.emit("actions")
 
 

@@ -106,8 +106,8 @@ Throughput always remains limited by capacity, staffing, power, funding and the 
 
 `Environment = clamp(100 − air − landfill damage − pressure + min(4.5, amenity), 0, 100)`.
 
-- **Air** (cap 80) gains this second's emissions and loses 0.12 points/min of natural recovery plus Park cleanup.
-- **Landfill damage** (cap 60) gains 0.045 points per landfilled unit and never decays. Parks do not reduce it.
+- **Air** (cap 80) gains this second's emissions and loses 0.12 points/min of natural recovery, then Park cleanup.
+- **Landfill damage** (cap 60) gains 0.045 points per landfilled unit. Park cleanup the air no longer needs (air already at 0) repairs it instead, so when a city's Parks outweigh its emissions and landfilling, Environment rises until it reaches 100. Natural recovery never reduces it.
 - **Pressure** (cap 45) is recomputed from waste present now: 0.16 × street + 0.045 × mixed buffer + 0.025 × (sorted streams + disposal queue).
 - **Amenity** is the sum of operating Parks' amenity, scaled by their operating fraction.
 
@@ -151,12 +151,51 @@ Cities may trade electricity, recyclable treatment and organic treatment at fixe
 
 Stocks a crisis created persist after it ends.
 
-## 12. Tick order
+## 12. ECO EMERGENCIES
+
+Three short competitive recycling challenges per match, one for each stage of the chain. The configuration's `emergencies` section holds every number below; `enabled: false` removes them and leaves the match exactly as without them.
+
+| Event | Stage | Challenge | Winner's boost |
+|---|---|---|---|
+| `collection_crisis` | Collection | Route each item on a conveyor to its bin | Collection Surge: Collection Center rate ×1.3 |
+| `sorting_overload` | Sorting | Slice flying recyclables; avoid contaminated and hazardous items | Precision Boost: Sorting Center rate ×1.3 |
+| `recycling_breakdown` | Recycling | Keep a shredder → filter → press line running | Recovery Surge: Recycling Center rate ×1.3 |
+
+**Schedule.** At match creation the server draws, from the match seed, an order of the three types and one start tick in each window: [210, 270], [510, 570], [810, 870]. Each event runs announcement (2 s), joining (6 s), countdown (3 s), play (25 s), then results (5 s); the configuration rejects windows that could overlap or run past the match. The city simulation never pauses.
+
+**Taking part.** Every player sees the announcement and may respond or carry on with the city; declining costs nothing. A player may also join late, during play, and enters at the current time. Only participants may act and be ranked.
+
+**One challenge for all.** Every item, flight path and fault comes from the event's seed, so all four players face the same challenge at the same times, independent of their city, device or connection. The view carries the challenge from the announcement to the end of the results. Each round has three phases (by default 0–7 s, 7–16 s, 16–25 s; 0–6, 6–15, 15–25 s for recycling):
+
+- **Routing:** single items far apart, then a faster belt with occasional close pairs, then the fastest belt with pairs and bursts of three. Items are never closer than 450 ms (a finger apart), and no item follows one of the same kind.
+- **Slicing:** a pattern director throws seeded patterns — solo, double toss and high arc from the start; recyclable burst, hazard mix and crossfire from the middle phase; speed burst and precision gap in the finale — never the same pattern twice in a row, and each new phase opens with a hazard mix. Every item to avoid keeps at least 160 field units from every recyclable in flight while both are on screen (a later recyclable steps aside; an item that cannot be placed is left out), so a careful swipe can always avoid it. The first phase has nothing to avoid.
+- **Recycling line:** each player runs the same deterministic line model (`simulation/systems/plant_model.gd`, shared byte for byte with the client) in 100 ms steps. Shredder jams stop its output; a 1 s buffer then drains and the line starves. Filter pressure rises (faster each phase) and surges; above the green band (600‰) efficiency falls, and at the top the filter blocks for 2 s. Press alignment drifts; efficiency falls with the offset. Line efficiency = min(shredder supply, filter, press).
+
+**Actions and validation.** Players send actions, never scores or efficiencies: `emergency_route {event, item, bin, t_ms}`, `emergency_slice {event, item, t_ms, x1, y1, x2, y2}` (a swipe segment on the 1000 × 1000 field) and `emergency_repair {event, machine, answer, t_ms}` (shredder: direction × 1000 + pulled distance, which must match the jam's direction and reach its release distance; filter: valve 0, 1 or 2, releasing 150, 300 or 550‰; press: a tap, right when the fixed oscillating marker is inside the safe band, ±90‰ narrowing to ±65‰), plus `emergency_join {event}`. The server advances the player's line to the action's time and applies it there; actions cannot go back before what it already simulated, and an intervention with nothing to fix is refused without effect. The server rejects unknown events, events not in play, non-participants, unknown items, items already handled, impossible choices, swipes that do not cross the object at that time, and more than 12 actions per player per second. Repeated action ids return the original receipt and never act twice.
+
+**Time.** `t_ms` is milliseconds since play started. The server accepts it only between 1,500 ms before and 250 ms after the second in which it received the action, within the item's own window. The same bound applies to every player; arrival order never decides anything.
+
+**Scoring.** Never below zero; missed items score nothing.
+
+| Challenge | Right | Wrong | Hazard | Streak bonus |
+|---|---:|---:|---:|---|
+| Routing | +10 | −10 | — | +25 every 5 in a row |
+| Slicing | +10 | −15 (contaminated) | −25 | +25 every 5 in a row |
+| Recycling line | +15 per repair | −10 (wrong direction or short pull is not counted as a repair; overcorrecting a valve below 150‰, or missing the press band) | — | +20 for every 5 s in a row above 90 % line efficiency |
+
+The recycling score also earns 10 points a second at full line efficiency (the line's efficiency integrated over the round), so keeping the line running matters more than the number of repairs. A large valve, or overcorrecting, halves the filter's throughput for 1.2 s; a valve that relieves pressure but leaves it above the green band helps and scores nothing.
+
+**Result.** At the tick play ends, participants are ranked by score, then fewest wrong actions, then most right actions, then seat. The top player wins if their score is above zero; otherwise nobody does.
+
+**Boost.** The winner's stage rate is multiplied for 90 ticks from the next tick. It acts only inside that stage's own rate: it creates no waste or materials, needs operating buildings of that stage (a city without them gains nothing), and keeps every cap, staffing and power rule. A new boost of the same stage replaces the old one; boosts never stack. A shared meter counts all players' right actions; it is information only.
+
+## 13. Tick order
 
 ```text
 begin                  crisis state for [t, t+1); per-tick ledgers reset
 construction           projects due at t complete and operate from t
 commands               ordered by receipt tick, seed-rotated seat, sequence; each atomic
+emergencies            results frozen and boosts awarded at the end of play; expired boosts dropped
 municipal_budget       taxes, then municipal upkeep
 funding                upkeep and fossil levy: homes, then staffing priority order
 power_generation       own generation (incl. last tick's biogas) and requests
@@ -176,7 +215,7 @@ contract_expiry        contracts ending at t+1 close and release escrow
 advance_time           t+1; at 1200 the final result is frozen
 ```
 
-## 13. Invariants
+## 14. Invariants
 
 After every phase:
 
@@ -188,5 +227,7 @@ After every phase:
 - Inventories respect their caps; materials respect theirs at the end of each tick.
 - Every building has its prerequisites. Plots are unique, there are at most two projects, and every project matches its building.
 - Contract cash and mass transfers are conserved. Escrow equals the maximum fee less payments while active, and nothing once closed.
+
+- Emergency scores are non-negative and only participants have any; each player holds at most one boost per stage, lasting exactly the configured time.
 
 A tick that breaks an invariant is rejected whole.

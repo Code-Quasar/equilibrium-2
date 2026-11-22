@@ -12,6 +12,7 @@ static var muted := false
 static var secure := false          # wss:// instead of ws://
 static var diagnostics := false     # developer network overlay
 static var reduce_motion := false   # gentler effects: no repeated pulses
+static var vibration := true        # short haptic taps in the emergencies (phones)
 static var address := ""            # host:port as typed
 static var _loaded := false
 
@@ -40,6 +41,7 @@ static func load_all() -> void:
 		secure = bool(c.get_value("net", "secure", secure))
 		diagnostics = bool(c.get_value("net", "diagnostics", diagnostics))
 		reduce_motion = bool(c.get_value("display", "reduce_motion", reduce_motion))
+		vibration = bool(c.get_value("display", "vibration", vibration))
 		address = str(c.get_value("net", "address", address))
 	apply_audio()
 
@@ -53,6 +55,7 @@ static func save() -> void:
 	c.set_value("net", "secure", secure)
 	c.set_value("net", "diagnostics", diagnostics)
 	c.set_value("display", "reduce_motion", reduce_motion)
+	c.set_value("display", "vibration", vibration)
 	c.set_value("net", "address", address)
 	c.save(PATH)
 	apply_audio()

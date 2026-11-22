@@ -13,7 +13,7 @@ const BUILDINGS := {
 	"commercial_district": ["Commercial District", "Jobs and income with little waste or smoke"],
 	"factory": ["Factory", "Many jobs and income; uses materials, power, makes waste and smoke"],
 	"public_services_center": ["Public Services Center", "Service capacity for Satisfaction"],
-	"park": ["Park", "Cleans the air and adds amenity; cannot clear waste or landfill damage"],
+	"park": ["Park", "Cleans the air, then repairs landfill damage; adds amenity"],
 	"collection_center": ["Collection Center", "Collects street waste and salvages some recyclables"],
 	"sorting_center": ["Sorting Center", "Sorts collected waste and reuses part of the recyclables"],
 	"recycling_center": ["Recycling Center", "Turns sorted recyclables into materials"],

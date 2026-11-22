@@ -60,10 +60,16 @@ def main() -> int:
     if sorted(p.name for p in (ROOT / "config/balance").iterdir()) != ["B2_1.json"]:
         errors.append("config/balance must hold only the live B2.1 configuration")
 
+    # The recycling line model runs on the server and in the client: one file, two copies.
+    shared = ROOT / "simulation/systems/plant_model.gd"
+    copy = ROOT / "client/godot/scripts/ui/emergency/plant_model.gd"
+    if shared.read_bytes() != copy.read_bytes():
+        errors.append("client/godot/scripts/ui/emergency/plant_model.gd must be identical to simulation/systems/plant_model.gd")
+
     if errors:
         print("\n".join(errors))
         return 1
-    print("PASS: resources, dependency boundaries, UIDs, links and B2.1 configuration shape")
+    print("PASS: resources, dependency boundaries, UIDs, links, B2.1 configuration shape and the shared plant model")
     return 0
 
 

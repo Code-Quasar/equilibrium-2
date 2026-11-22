@@ -26,6 +26,7 @@ var placing: Dictionary = {}             # {type, at, ok, why}
 var road_mode := ""                      # "", "draw", "erase"
 var stale := false
 var needs := {}                          # tile -> what the building lacks
+var highlight := {}                      # tile -> true: buildings an emergency boost acts on
 var ui_blocks: Callable = func(_p: Vector2) -> bool: return false
 var clock: Callable = func() -> float: return 0.0
 var demo := false                        # menu backdrop: no input, slow orbit
@@ -497,6 +498,9 @@ func rebuild() -> void:
 		_mark_site(Vector2i(placing["at"]), Color(0.31, 0.9, 0.47, 0.35) if placing.get("ok", false) else Color(0.91, 0.36, 0.29, 0.4))
 	if selected >= 0 and layout.placements.has(selected):
 		_mark_site(layout.placements[selected], Color(1, 0.84, 0.3, 0.45))
+	for t in highlight:
+		if layout.placements.has(t):
+			_mark_site(layout.placements[t], Color(1, 0.82, 0.25, 0.55))
 
 
 ## A building's models on its site, at its size.

@@ -19,6 +19,7 @@ const Operations = preload("res://simulation/systems/operations.gd")
 const Production = preload("res://simulation/systems/production.gd")
 const Satisfaction = preload("res://simulation/systems/satisfaction.gd")
 const Waste = preload("res://simulation/systems/waste.gd")
+const Emergencies = preload("res://simulation/systems/emergencies.gd")
 
 var buildings: RefCounted
 var operations: RefCounted
@@ -27,6 +28,7 @@ var environment: RefCounted
 var production: RefCounted
 var satisfaction: RefCounted
 var market: RefCounted
+var emergencies: RefCounted
 var _balance: Dictionary = {}
 var _state: Dictionary = {}
 var _pending: Array = []
@@ -34,7 +36,8 @@ var _stepping: bool = false
 var _commands: Dictionary = {}
 var _phases: Array = []
 
-func initialize(match_id: String, seed_value: int, foundations: Array) -> String:
+## emergency_schedule: tests and the server's developer mode only (see Emergencies).
+func initialize(match_id: String, seed_value: int, foundations: Array, emergency_schedule: Array = []) -> String:
 	if not _state.is_empty():
 		return "already_initialized"
 	_balance = Balance.load_config()
@@ -48,15 +51,19 @@ func initialize(match_id: String, seed_value: int, foundations: Array) -> String
 	production = Production.new(b, buildings, waste)
 	environment = EnvironmentSystem.new(b, buildings)
 	satisfaction = Satisfaction.new(b, buildings, operations)
+	emergencies = Emergencies.new(b)
 	for kind in Buildings.COMMANDS:
 		_commands[kind] = [buildings.validate, buildings.execute]
 	for kind in Market.COMMANDS:
 		_commands[kind] = [market.validate, market.execute]
 	_commands["sell_materials"] = [Materials.validate_sale, _sell_materials]
+	for kind in Emergencies.COMMANDS:
+		_commands[kind] = [emergencies.validate, emergencies.execute]
 	_phases = [
 		["begin", _begin],
 		["construction", buildings.complete_projects],
 		["commands", Callable()],
+		["emergencies", emergencies.update],
 		["municipal_budget", operations.municipal],
 		["funding", operations.fund],
 		["power_generation", operations.measure],
@@ -75,7 +82,7 @@ func initialize(match_id: String, seed_value: int, foundations: Array) -> String
 		["contract_expiry", market.expire],
 		["advance_time", _advance],
 	]
-	_state = State.create(match_id, seed_value, foundations, b)
+	_state = State.create(match_id, seed_value, foundations, b, emergency_schedule)
 	if _state.is_empty():
 		return "invalid_match_setup"
 	Events.apply(_state, b.crises)
@@ -113,6 +120,14 @@ func build_options(player_id: int) -> Dictionary:
 			var command: Dictionary = {"player_id": player_id, "command_type": "construct", "payload": {"building_type": kind, "size": size}}
 			result[kind][size] = "match_closed" if _state.status == "finished" else buildings.validate(_state, command)
 	return result
+
+## The ECO EMERGENCY part of one seat's view: the event under way (its timeline,
+## challenge, live leaderboard and result), the seat's own progress and boosts.
+func emergency_view(player_id: int) -> Dictionary:
+	return emergencies.view(_state, player_id)
+
+func emergency_phase(ev: Dictionary) -> String:
+	return Emergencies.phase(ev, _state.tick, _balance.emergencies)
 
 func submit(raw: Variant, authenticated_player: int) -> Dictionary:
 	if _state.is_empty():

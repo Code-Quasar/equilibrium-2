@@ -15,6 +15,7 @@ const A = preload("res://simulation/core/arithmetic.gd")
 const Buildings = preload("res://simulation/systems/buildings.gd")
 const Finance = preload("res://simulation/systems/finance.gd")
 const Materials = preload("res://simulation/systems/materials.gd")
+const Emergencies = preload("res://simulation/systems/emergencies.gd")
 const R: int = 0
 const O: int = 1
 const X: int = 2
@@ -62,18 +63,19 @@ func collect_and_sort(state: Dictionary, _ctx: Dictionary) -> String:
 		for key in FLOWS:
 			city.waste.tick[key] = 0
 		generate(city, city.carries, "household", A.mul(b.waste.household * city.population, state.crisis.effects.household), A.S)
-		_collect(city)
+		# An ECO EMERGENCIES boost raises a stage's own rate; it never adds waste.
+		_collect(city, Emergencies.multiplier(state, city.city_id, "collection"))
 		_municipal_collect(city)
-		_sort(city)
-		_budget(city)
+		_sort(city, Emergencies.multiplier(state, city.city_id, "sorting"))
+		_budget(city, Emergencies.multiplier(state, city.city_id, "recycling"))
 	return ""
 
-func _collect(city: Dictionary) -> void:
+func _collect(city: Dictionary, boost: int = A.S) -> void:
 	for center in Buildings.by_tile(city, "collection_center"):
 		if not center.op.funded:
 			continue
 		var t: Dictionary = catalogue.tier(center)
-		var capacity: int = A.per_tick(center.carries, "collection", t.collection, center.op.fraction_micro)
+		var capacity: int = A.per_tick(center.carries, "collection", A.mul(t.collection, boost), center.op.fraction_micro)
 		var room: int = b.waste.mixed_cap - A.total(city.mixed_micro)
 		var taken: Array = A.allocate(mini(capacity, room), city.street_micro)
 		var salvage: int = A.carried(center.carries, "salvage", taken[R], t.collection_reuse, A.S)
@@ -93,12 +95,12 @@ func _municipal_collect(city: Dictionary) -> void:
 	city.disposal_micro += A.total(taken)
 	flow(city, "municipal_collected", A.total(taken))
 
-func _sort(city: Dictionary) -> void:
+func _sort(city: Dictionary, boost: int = A.S) -> void:
 	for sorter in Buildings.by_tile(city, "sorting_center"):
 		if not sorter.op.funded:
 			continue
 		var t: Dictionary = catalogue.tier(sorter)
-		var capacity: int = A.per_tick(sorter.carries, "sorting", t.sorting, sorter.op.fraction_micro)
+		var capacity: int = A.per_tick(sorter.carries, "sorting", A.mul(t.sorting, boost), sorter.op.fraction_micro)
 		var taken: Array = A.allocate(capacity, city.mixed_micro)
 		for i in range(3):
 			city.mixed_micro[i] -= taken[i]
@@ -124,13 +126,13 @@ func _store(city: Dictionary, stream: int, amount: int) -> void:
 	flow(city, "overflow_to_disposal", amount - kept)
 
 ## Per-plant throughput for this second. Contracted imports and local stock share it.
-func _budget(city: Dictionary) -> void:
+func _budget(city: Dictionary, recycling_boost: int = A.S) -> void:
 	var capacity: Dictionary = {"recycling_center": 0, "biogas_facility": 0}
 	for kind in capacity:
 		for plant in Buildings.by_tile(city, kind):
 			if not plant.op.funded:
 				continue
-			var rate: int = catalogue.tier(plant).recycling if kind == "recycling_center" else catalogue.tier(plant).biogas
+			var rate: int = A.mul(catalogue.tier(plant).recycling, recycling_boost) if kind == "recycling_center" else catalogue.tier(plant).biogas
 			plant.op.budget_micro = A.per_tick(plant.carries, "throughput", rate, plant.op.fraction_micro)
 			capacity[kind] += A.mul(rate, plant.op.fraction_micro)
 	city.processing = {"recyclable_capacity_micro": capacity.recycling_center, "organic_capacity_micro": capacity.biogas_facility}

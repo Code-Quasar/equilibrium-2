@@ -4,8 +4,8 @@ extends RefCounted
 ## panels and interface sounds, set in Pixelify Sans (SIL OFL 1.1), plus small
 ## factories so screens can be built in code.
 ##
-## Type scale: Display 28 · Title 20 · Value 16 bold · Body 15 · Caption 13 ·
-## Small 12, all in Pixelify Sans. Figures (the HUD, prices, chips) use a bold
+## Type scale: Display 28 · Title 20 · Value 16 medium · Body 15 · Caption 13 ·
+## Small 12, all in Pixelify Sans (headings in its medium weight). Figures (the HUD, prices, chips) use a bold
 ## plain sans instead: Pixelify's 5 reads as an S at phone sizes, and a number
 ## must never be misread.
 
@@ -89,6 +89,12 @@ static func number_font() -> Font:
 	return _numbers
 
 
+## A short haptic tap on phones that support it, when Settings allow it.
+static func haptic(ms := 18) -> void:
+	if Settings.vibration and OS.has_feature("mobile"):
+		Input.vibrate_handheld(ms)
+
+
 ## The click from the Kenney interface sounds.
 static func click() -> void:
 	if sound and sound.is_inside_tree():
@@ -113,7 +119,9 @@ static func box(bg: Color, radius := 16, border := Color(0, 0, 0, 0), border_w :
 static func make_theme() -> Theme:
 	var t := Theme.new()
 	var regular := font(400)
-	var bold := font(700)
+	# Medium, not the heaviest weight: at phone sizes Pixelify's heaviest C closes
+	# into an O.
+	var bold := font(500)
 	t.default_font = regular
 	t.default_font_size = 15
 

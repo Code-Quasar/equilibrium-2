@@ -114,6 +114,29 @@ static func _consistency(c: Dictionary) -> String:
 			neutral = neutral and crisis[key] == A.S
 		if crisis.start == crisis.end and not neutral:
 			return "empty_crisis_with_effect"
+	var em: Dictionary = c.emergencies
+	var span: int = em.announcement + em.join + em.countdown + em.active + em.results
+	if em.active < 5 or em.join < 1 or em.max_actions < 1 or em.boost < 1:
+		return "invalid_emergency_timeline"
+	for i in range(em.windows.size()):
+		var w: Array = em.windows[i]
+		# Events never overlap and the last one ends before the match does.
+		if w[1] + span >= (em.windows[i + 1][0] if i + 1 < em.windows.size() else c.duration):
+			return "emergency_windows_overlap"
+	for kind in em.pacing:
+		var pc: Dictionary = em.pacing[kind]
+		if pc.has("phase_b_ms") and (pc.phase_b_ms <= 0 or pc.phase_b_ms >= pc.phase_c_ms or pc.phase_c_ms >= em.active * 1000):
+			return "invalid_emergency_phases"
+	var rb: Dictionary = em.pacing.recycling_breakdown
+	if rb.green_max >= rb.red_min or rb.red_min >= 1000 or rb.align_ok >= rb.align_stop or rb.align_stop > 500 \
+			or rb.jam_dist_min > rb.jam_dist_max or rb.jam_dist_max > 999 or rb.marker_period_a_ms < 200 or rb.marker_period_c_ms < 200:
+		return "invalid_recycling_plant"
+	for kind in em.multipliers:
+		if em.multipliers[kind] < A.S:
+			return "invalid_emergency_multiplier"
+		var sc: Dictionary = em.scoring[kind]
+		if sc.correct < 1 or sc.streak < 1:
+			return "invalid_emergency_scoring"
 	for kind in TYPES:
 		var item: Dictionary = c.buildings[kind]
 		for required in item.requires:
@@ -305,6 +328,7 @@ class Reader:
 				"pressure_cap": number(pressure, "cap", MICRO),
 			},
 			"crises": [],
+			"emergencies": {},
 			"market": {
 				"max_offers": number(market, "max_open_offers_per_city", COUNT),
 				"max_contracts": number(market, "max_active_contracts_per_buyer", COUNT),
@@ -327,9 +351,65 @@ class Reader:
 			for category in CATEGORIES:
 				c.waste.composition[source].append(number(mix, category, FRACTION))
 		c.crises = crises(raw.get("crises"))
+		c.emergencies = emergencies(section(raw, "emergencies"))
 		c.buildings = buildings(section(raw, "buildings"))
 		c.foundations = foundations(section(raw, "foundations"))
 		return c
+
+	## ECO EMERGENCIES: timeline, boosts, latency policy, scoring and pacing.
+	func emergencies(raw: Dictionary) -> Dictionary:
+		const EVENTS = ["collection_crisis", "sorting_overload", "recycling_breakdown"]
+		const PACING = {
+			"collection_crisis": ["first_ms", "phase_b_ms", "phase_c_ms", "gap_a_ms", "gap_b_ms", "gap_c_ms", "travel_a_ms", "travel_b_ms",
+				"travel_c_ms", "pair_b_percent", "pair_c_percent", "burst_c_percent", "pair_gap_ms"],
+			"sorting_overload": ["first_ms", "phase_b_ms", "phase_c_ms", "gap_a_ms", "gap_b_ms", "gap_c_ms", "flight_a_ms", "flight_b_ms",
+				"flight_c_ms", "hit_radius", "hazard_clearance"],
+			"recycling_breakdown": ["phase_b_ms", "phase_c_ms", "jam_first_ms", "jam_gap_a_ms", "jam_gap_b_ms", "jam_gap_c_ms", "jam_dist_min",
+				"jam_dist_max", "surge_first_ms", "surge_gap_b_ms", "surge_gap_c_ms", "surge_amount", "drift_first_ms", "drift_gap_b_ms",
+				"drift_gap_c_ms", "drift_rate", "pressure_a", "pressure_b", "pressure_c", "green_max", "red_min", "block_ms", "slow_ms",
+				"slow_permille", "valve_small", "valve_medium", "valve_large", "overcorrect_below", "align_ok", "align_stop",
+				"marker_period_a_ms", "marker_period_c_ms", "press_band_a", "press_band_c", "buffer_ms", "high_permille"],
+		}
+		exact_keys(raw, ["enabled", "start_windows", "announcement_seconds", "join_seconds", "countdown_seconds", "active_seconds",
+			"results_seconds", "boost_seconds", "boost_multipliers", "max_actions_per_second", "late_action_ms", "early_action_ms",
+			"scoring", "pacing"], "emergencies")
+		if typeof(raw.get("enabled")) != TYPE_BOOL:
+			fail("invalid_emergencies_enabled")
+		var e: Dictionary = {"enabled": raw.get("enabled") == true, "windows": [],
+			"announcement": number(raw, "announcement_seconds", COUNT), "join": number(raw, "join_seconds", COUNT),
+			"countdown": number(raw, "countdown_seconds", COUNT), "active": number(raw, "active_seconds", COUNT),
+			"results": number(raw, "results_seconds", COUNT), "boost": number(raw, "boost_seconds", COUNT),
+			"max_actions": number(raw, "max_actions_per_second", COUNT), "late_ms": number(raw, "late_action_ms", COUNT),
+			"early_ms": number(raw, "early_action_ms", COUNT), "multipliers": {}, "scoring": {}, "pacing": {}}
+		var windows: Variant = raw.get("start_windows")
+		if not windows is Array or windows.size() != EVENTS.size():
+			fail("invalid_emergency_windows")
+		else:
+			for w in windows:
+				if not w is Array or w.size() != 2 or typeof(w[0]) not in [TYPE_INT, TYPE_FLOAT] or typeof(w[1]) not in [TYPE_INT, TYPE_FLOAT] 						or float(w[0]) != floor(float(w[0])) or float(w[1]) != floor(float(w[1])) or w[0] < 0 or w[1] < w[0]:
+					fail("invalid_emergency_windows")
+					break
+				e.windows.append([int(w[0]), int(w[1])])
+		var multipliers: Dictionary = section(raw, "boost_multipliers")
+		var scoring: Dictionary = section(raw, "scoring")
+		var pacing: Dictionary = section(raw, "pacing")
+		exact_keys(multipliers, EVENTS, "boost_multipliers")
+		exact_keys(scoring, EVENTS, "scoring")
+		exact_keys(pacing, EVENTS, "pacing")
+		for kind in EVENTS:
+			e.multipliers[kind] = number(multipliers, kind, MICRO)
+			var sc: Dictionary = section(scoring, kind)
+			exact_keys(sc, ["correct", "incorrect", "hazard", "streak", "streak_bonus", "uptime_per_second"], "scoring." + kind)
+			e.scoring[kind] = {"correct": number(sc, "correct", COUNT), "incorrect": number(sc, "incorrect", COUNT),
+				"hazard": number(sc, "hazard", COUNT, kind != "sorting_overload"), "streak": number(sc, "streak", COUNT),
+				"streak_bonus": number(sc, "streak_bonus", COUNT),
+				"uptime_per_second": number(sc, "uptime_per_second", COUNT, kind != "recycling_breakdown")}
+			var pc: Dictionary = section(pacing, kind)
+			exact_keys(pc, PACING[kind], "pacing." + kind)
+			e.pacing[kind] = {}
+			for key in PACING[kind]:
+				e.pacing[kind][key] = number(pc, key, COUNT)
+		return e
 
 	func crises(value: Variant) -> Array:
 		var result: Array = []

@@ -3,8 +3,8 @@ extends SceneTree
 ## scripted full match in two processes with reversed submission order and
 ## requires byte-identical canonical state.
 const SUITES = ["tests/rules/config_test.gd", "tests/rules/construction_test.gd", "tests/rules/waste_test.gd",
-	"tests/rules/economy_test.gd", "tests/rules/migration_test.gd", "tests/rules/market_test.gd",
-	"tests/integration/online_foundation.gd", "tests/integration/online_completion.gd"]
+	"tests/rules/economy_test.gd", "tests/rules/migration_test.gd", "tests/rules/market_test.gd", "tests/rules/emergencies_test.gd",
+	"tests/integration/online_foundation.gd", "tests/integration/online_emergencies.gd", "tests/integration/online_completion.gd"]
 
 func _initialize() -> void:
 	var failed: bool = false

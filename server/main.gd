@@ -20,6 +20,16 @@ func _initialize() -> void:
 				if not args[i+1].is_valid_int(): fail("Invalid seed"); return
 				app.seed_value = int(args[i+1])
 			"--stop-file": stop_file = args[i+1]
+			"--dev-emergencies":
+				# Developer mode only: "collection_crisis@30,sorting_overload@90,recycling_breakdown@150".
+				var plan: Array = []
+				for part in args[i+1].split(","):
+					var bits: PackedStringArray = part.split("@")
+					if bits.size() != 2 or bits[0] not in ["collection_crisis","sorting_overload","recycling_breakdown"] or not bits[1].is_valid_int():
+						fail("Invalid --dev-emergencies"); return
+					plan.append({"type":bits[0],"start":int(bits[1])})
+				app.dev_emergencies = plan
+				print("DEVELOPER MODE: fixed emergency schedule ", plan)
 			"--draft-grace-ms":
 				if not args[i+1].is_valid_int() or int(args[i+1]) < 100: fail("Invalid draft grace"); return
 				app.draft_grace_ms = int(args[i+1])

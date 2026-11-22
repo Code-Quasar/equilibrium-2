@@ -238,5 +238,37 @@
     "circular_foundation": {"starting_buildings": [{"id": "collection_center", "tier": "S"}, {"id": "sorting_center", "tier": "S"}], "starting_cash_credits": 393, "starting_materials_units": 0},
     "energy_pioneer": {"starting_buildings": [{"id": "renewable_power_plant", "tier": "S"}], "starting_cash_credits": 395, "starting_materials_units": 0},
     "investment_district": {"starting_buildings": [], "starting_cash_credits": 660, "starting_materials_units": 0}
+  },
+  "emergencies": {
+    "enabled": true,
+    "start_windows": [[210, 270], [510, 570], [810, 870]],
+    "announcement_seconds": 2,
+    "join_seconds": 6,
+    "countdown_seconds": 3,
+    "active_seconds": 25,
+    "results_seconds": 5,
+    "boost_seconds": 90,
+    "boost_multipliers": {"collection_crisis": 1.3, "sorting_overload": 1.3, "recycling_breakdown": 1.3},
+    "max_actions_per_second": 12,
+    "late_action_ms": 1500,
+    "early_action_ms": 250,
+    "scoring": {
+      "collection_crisis": {"correct": 10, "incorrect": 10, "streak": 5, "streak_bonus": 25},
+      "sorting_overload": {"correct": 10, "incorrect": 15, "hazard": 25, "streak": 5, "streak_bonus": 25},
+      "recycling_breakdown": {"correct": 15, "incorrect": 10, "streak": 5, "streak_bonus": 20, "uptime_per_second": 10}
+    },
+    "pacing": {
+      "collection_crisis": {"first_ms": 700, "phase_b_ms": 7000, "phase_c_ms": 16000, "gap_a_ms": 1500, "gap_b_ms": 1050, "gap_c_ms": 760,
+        "travel_a_ms": 6000, "travel_b_ms": 4800, "travel_c_ms": 3900, "pair_b_percent": 25, "pair_c_percent": 30, "burst_c_percent": 25, "pair_gap_ms": 450},
+      "sorting_overload": {"first_ms": 700, "phase_b_ms": 7000, "phase_c_ms": 16000, "gap_a_ms": 1500, "gap_b_ms": 1150, "gap_c_ms": 900,
+        "flight_a_ms": 2600, "flight_b_ms": 2300, "flight_c_ms": 1900, "hit_radius": 70, "hazard_clearance": 160},
+      "recycling_breakdown": {"phase_b_ms": 6000, "phase_c_ms": 15000, "jam_first_ms": 1500, "jam_gap_a_ms": 6000, "jam_gap_b_ms": 5000,
+        "jam_gap_c_ms": 2800, "jam_dist_min": 250, "jam_dist_max": 600, "surge_first_ms": 6500, "surge_gap_b_ms": 3500, "surge_gap_c_ms": 2300,
+        "surge_amount": 260, "drift_first_ms": 4500, "drift_gap_b_ms": 5000, "drift_gap_c_ms": 3200, "drift_rate": 240,
+        "pressure_a": 15, "pressure_b": 30, "pressure_c": 60, "green_max": 600, "red_min": 850, "block_ms": 2000, "slow_ms": 1200,
+        "slow_permille": 500, "valve_small": 150, "valve_medium": 300, "valve_large": 550, "overcorrect_below": 150, "align_ok": 80,
+        "align_stop": 420, "marker_period_a_ms": 1600, "marker_period_c_ms": 1150, "press_band_a": 90, "press_band_c": 65,
+        "buffer_ms": 1000, "high_permille": 900}
+    }
   }
 }
