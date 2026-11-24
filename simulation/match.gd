@@ -37,7 +37,7 @@ var _commands: Dictionary = {}
 var _phases: Array = []
 
 ## emergency_schedule: tests and the server's developer mode only (see Emergencies).
-func initialize(match_id: String, seed_value: int, foundations: Array, emergency_schedule: Array = []) -> String:
+func initialize(match_id: String, seed_value: int, foundations: Array, emergency_schedule: Array = [], start_bonus: int = 0) -> String:
 	if not _state.is_empty():
 		return "already_initialized"
 	_balance = Balance.load_config()
@@ -82,7 +82,7 @@ func initialize(match_id: String, seed_value: int, foundations: Array, emergency
 		["contract_expiry", market.expire],
 		["advance_time", _advance],
 	]
-	_state = State.create(match_id, seed_value, foundations, b, emergency_schedule)
+	_state = State.create(match_id, seed_value, foundations, b, emergency_schedule, start_bonus)
 	if _state.is_empty():
 		return "invalid_match_setup"
 	Events.apply(_state, b.crises)

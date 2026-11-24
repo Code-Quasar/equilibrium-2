@@ -9,6 +9,7 @@ const CARDS = ["industrial_legacy", "circular_foundation", "energy_pioneer", "in
 var engine: RefCounted
 var draft: Dictionary = {}
 var emergency_schedule: Array = []          # server developer mode only
+var start_bonus: int = 0                    # server developer mode only: extra starting cash, micro-credits
 
 func create(match_id: String, seed_value: int, bot_seats: Array = []) -> String:
 	if not draft.is_empty():
@@ -56,7 +57,7 @@ func submit(command: Variant, authenticated_player: int) -> Dictionary:
 	draft.results[command.command_id] = {"status": "applied" if error.is_empty() else error, "fingerprint": fingerprint}
 	if draft.turn == 4:
 		engine = Sim.new()
-		var initialized: String = engine.initialize(draft.match_id, draft.seed, draft.choices, emergency_schedule)
+		var initialized: String = engine.initialize(draft.match_id, draft.seed, draft.choices, emergency_schedule, start_bonus)
 		if not initialized.is_empty():
 			return {"status": initialized}
 		draft.status = "complete"

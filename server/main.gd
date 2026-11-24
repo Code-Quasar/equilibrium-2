@@ -20,6 +20,11 @@ func _initialize() -> void:
 				if not args[i+1].is_valid_int(): fail("Invalid seed"); return
 				app.seed_value = int(args[i+1])
 			"--stop-file": stop_file = args[i+1]
+			"--dev-cash":
+				# Developer mode only: extra starting cash for every city (demos, recordings).
+				if not args[i+1].is_valid_int() or int(args[i+1]) < 0: fail("Invalid --dev-cash"); return
+				app.dev_cash = int(args[i+1])
+				print("DEVELOPER MODE: every city starts with %d extra cash" % app.dev_cash)
 			"--dev-emergencies":
 				# Developer mode only: "collection_crisis@30,sorting_overload@90,recycling_breakdown@150".
 				var plan: Array = []

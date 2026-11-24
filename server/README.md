@@ -38,7 +38,7 @@ To try the three emergencies without waiting for their windows, start a server w
 godot --headless --path . --script server/main.gd -- --port 9080 --dev-emergencies collection_crisis@25,sorting_overload@75,recycling_breakdown@125
 ```
 
-It is an operator command-line option only, never a network message, so no player can trigger it. Views then carry `public.developer_mode = true` (clients label it). The server's output logs every emergency phase change with the authoritative scores, result and boosts, for example `EMERGENCY tick=62 em1 collection_crisis results scores=[330, 0, 0, 0] ...`. Bots do not take part in emergencies.
+`--dev-cash N` adds N credits to every city's starting cash, for demos and recordings. Both are operator command-line options only, never network messages, so no player can trigger them. Views then carry `public.developer_mode = true` (clients label it). The server's output logs every emergency phase change with the authoritative scores, result and boosts, for example `EMERGENCY tick=62 em1 collection_crisis results scores=[330, 0, 0, 0] ...`. Bots do not take part in emergencies.
 
 ## Checks
 

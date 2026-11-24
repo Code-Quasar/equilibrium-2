@@ -61,6 +61,13 @@ var _ground_sig := ""                    # placements + roads the ground was bui
 var _frame: Node3D                       # the landscape around the playable map
 var _building_ids := {}                  # ids under construction at the last rebuild
 var _bar_tex: ImageTexture
+var _env: Environment
+var _haze: MeshInstance3D                 # a smog layer over the city, as thick as its air pollution
+var _haze_mat: StandardMaterial3D
+var _puffs: Array = []                    # [node, base, phase, material] chimney smoke
+var _smoke_t := 0.0
+const SKY := Color("#8fc4e8")
+const SMOG := Color("#8d8170")
 
 
 func _ready() -> void:
@@ -73,6 +80,18 @@ func _ready() -> void:
 	env.environment.ambient_light_energy = 0.35
 	env.environment.tonemap_mode = Environment.TONE_MAPPER_LINEAR
 	add_child(env)
+	_env = env.environment
+	_haze = MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(400, 400)
+	_haze.mesh = plane
+	_haze_mat = _overlay(Color(SMOG, 0.0))
+	_haze_mat.no_depth_test = true
+	_haze_mat.render_priority = 2
+	_haze.material_override = _haze_mat
+	_haze.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_haze.position = Vector3(23, 7, 23)
+	add_child(_haze)
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-55, -35, 0)
 	sun.light_energy = 0.75
@@ -152,7 +171,18 @@ func show_city(c: Dictionary, now_tick: int, key: String, reserved: Dictionary =
 		_build_roads()
 		_build_ground()
 	traffic.set_demand(c, layout)
+	_pollution(c)
 	rebuild()
+
+
+## The city's real air pollution as smog over it: none at all in clean air, a
+## thick brown haze and a grey sky near the air-burden cap. Read-only views of a
+## rival show its city as the server reports it.
+func _pollution(c: Dictionary) -> void:
+	var air := float(c.get("air_micro", 0)) / 1000000.0
+	var k := clampf((air - 6.0) / 40.0, 0.0, 1.0)
+	_haze_mat.albedo_color = Color(SMOG, 0.42 * k)
+	_env.background_color = SKY.lerp(Color("#b7ad9c"), k)
 
 
 ## The menu's backdrop: a sample town on the same map, purely decorative,
@@ -488,6 +518,7 @@ func rebuild() -> void:
 	UI.clear(_buildings)
 	UI.clear(_marks)
 	_grow.clear()
+	_puffs.clear()
 	for b in city.get("buildings", []):
 		if layout.placements.has(int(b["tile"])):
 			_add_building(b)
@@ -548,6 +579,34 @@ func _add_building(b: Dictionary) -> void:
 		# Just finished: a short pop and a ring of light.
 		_building_ids.erase(id)
 		_celebrate(node)
+	var op_frac := int(b.get("op", {}).get("fraction_micro", 0))
+	if b.get("status", "") == "complete" and str(b["type"]) in ["factory", "fossil_power_plant"] and op_frac > 0:
+		for k in 3:
+			var puff := MeshInstance3D.new()
+			var sm := SphereMesh.new()
+			sm.radius = 0.32
+			sm.height = 0.64
+			puff.mesh = sm
+			var mat := _overlay(Color(0.3, 0.29, 0.28, 0.5))
+			puff.material_override = mat
+			puff.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			var base := node.position + Vector3(0.4, 2.0 if str(b["type"]) == "factory" else 2.6, -0.3)
+			_marks.add_child(puff)
+			_puffs.append([puff, base, k / 3.0 + float(id % 7) * 0.13, mat])
+	if str(b["type"]) == "residential_district" and b.get("status", "") == "complete":
+		var street := 0.0
+		for x in city.get("street_micro", []):
+			street += float(x) / 1000000.0
+		var bags := mini(5, int(street / 15.0))
+		for k in bags:
+			var bag := MeshInstance3D.new()
+			var bm := SphereMesh.new()
+			bm.radius = 0.17
+			bm.height = 0.3
+			bag.mesh = bm
+			bag.material_override = _overlay(Color("#2d3b33") if k % 2 == 0 else Color("#4a4f3a"))
+			bag.position = node.position + Vector3(-0.9 + k * 0.32, 0.13, 1.05 - (k % 2) * 0.2)
+			_marks.add_child(bag)
 	var need: String = needs.get(t, "" if (read_only or layout.linked(t)) else "road")
 	if need != "" and b.get("status", "") == "complete":
 		_overlay_all(node, _dim)
@@ -683,6 +742,14 @@ func _notification(what: int) -> void:
 func _process(delta: float) -> void:
 	if visible and camera and not camera.current:
 		camera.make_current()
+	_smoke_t += delta
+	for pf in _puffs:
+		if not is_instance_valid(pf[0]):
+			continue
+		var u := fmod(_smoke_t / 2.6 + float(pf[2]), 1.0)
+		(pf[0] as Node3D).position = (pf[1] as Vector3) + Vector3(u * 0.6, u * 2.4, -u * 0.3)
+		(pf[0] as Node3D).scale = Vector3.ONE * (0.6 + u * 1.6)
+		(pf[3] as StandardMaterial3D).albedo_color.a = 0.5 * (1.0 - u)
 	if _press_ms >= 0 and _touches.size() == 1 and _drag < 14.0 and not _painting and not _ghost_drag \
 			and Time.get_ticks_msec() - _press_ms > HOLD_MS:
 		_press_ms = -1

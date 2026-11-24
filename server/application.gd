@@ -17,6 +17,7 @@ var phase: String = "waiting"
 var match_session: RefCounted
 var seed_value: int = 42
 var dev_emergencies: Array = []                 # --dev-emergencies, developer mode only
+var dev_cash: int = 0                           # --dev-cash, developer mode only
 var outbox: Array = []
 var disconnect_ids: Array = []
 var draft_disconnect_deadlines: Dictionary = {}
@@ -102,7 +103,7 @@ func request(id: int, m: Dictionary, now: int) -> void:
 					seats[i] = {"controller":"bot","ready":true}
 					bots.append(i)
 			match_session = MatchSession.new()
-			error = match_session.initialize("match-"+lobby_id,seed_value,bots,dev_emergencies)
+			error = match_session.initialize("match-"+lobby_id,seed_value,bots,dev_emergencies,dev_cash)
 			if error != "": phase = "failed"; reject(id,m,"initialization_failed"); return
 			phase = "draft"
 			revision += 1

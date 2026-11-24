@@ -12,7 +12,8 @@ const Emergencies = preload("res://simulation/systems/emergencies.gd")
 
 ## Foundations are one unique card per seat, in seat order. emergency_schedule fixes
 ## the ECO EMERGENCIES ([{type, start}]) for tests and the server's developer mode.
-static func create(match_id: String, seed_value: int, foundations: Array, b: Dictionary, emergency_schedule: Array = []) -> Dictionary:
+## start_bonus adds cash to every city, for the server's developer mode only.
+static func create(match_id: String, seed_value: int, foundations: Array, b: Dictionary, emergency_schedule: Array = [], start_bonus: int = 0) -> Dictionary:
 	if match_id.is_empty() or foundations.size() != b.players:
 		return {}
 	for foundation in foundations:
@@ -29,7 +30,7 @@ static func create(match_id: String, seed_value: int, foundations: Array, b: Dic
 			"capacity": {"housing": 0, "services_micro": b.city.services * A.S, "employed": 0},
 			"employment": {"municipal": 0, "buildings": 0}, "power": {}, "biogas_pending_micro_E": 0, "carries": {}}
 		city.projects.resize(b.construction.slots)
-		Finance.initialize(city, package.credits)
+		Finance.initialize(city, package.credits + start_bonus)
 		Materials.initialize(city, b.city.materials + package.materials)
 		Waste.initialize(city)
 		for key in ["municipal_micro_E", "plants_micro_E", "biogas_micro_E", "imports_micro_E", "exports_micro_E",

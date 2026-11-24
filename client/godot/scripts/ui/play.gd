@@ -1965,7 +1965,8 @@ func _visit_refresh() -> void:
 		bs.append({"id": 100000 + int(b["tile"]), "tile": int(b["tile"]), "type": str(b["type"]), "size": str(b.get("size", "S")),
 			"status": str(b.get("status", "complete")), "op": {"fraction_micro": 1000000}, "visitor": true})
 	var city := {"buildings": bs, "population": o.get("population", 0), "projects": []}
-	map.show_city(city, tick(), "visit:%s:%d" % [str(v().get("match_id", "")), visiting])
+	# The rival city's own key: the same land and the same placement order its owner sees.
+	map.show_city(city, tick(), "%s:%d" % [str(v().get("match_id", "")), visiting])
 
 
 func _building_at(t: int) -> Dictionary:

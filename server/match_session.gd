@@ -13,9 +13,10 @@ var view_seq: int = 0
 var failed: bool = false
 var developer: bool = false                 # --dev-emergencies: fixed schedule, timeline log
 var _logged: Dictionary = {}
-func initialize(match_id: String, seed_value: int, bot_seats: Array, dev_emergencies: Array = []) -> String:
+func initialize(match_id: String, seed_value: int, bot_seats: Array, dev_emergencies: Array = [], dev_cash: int = 0) -> String:
 	bots = bot_seats.duplicate()
-	developer = not dev_emergencies.is_empty()
+	developer = not dev_emergencies.is_empty() or dev_cash > 0
+	game.start_bonus = dev_cash * 1000000
 	game.emergency_schedule = dev_emergencies.duplicate(true)
 	var error: String = game.create(match_id,seed_value,bots)
 	if error == "": Bots.draft(game,gateway,bots)
